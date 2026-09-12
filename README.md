@@ -44,11 +44,13 @@ Tests are offline: they use an injected fake runner and token counter plus tempo
 
 ## Tutorial
 
-None yet. This card pass ships the pipeline package, tests and `MODEL_CARD.md`; a `NOTEBOOK_SPEC` 1.0 tutorial notebook is a later pass.
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/t5-base-text2text-pipeline/blob/main/tutorials/t5_base_text2text_colab.ipynb)
+
+`tutorials/t5_base_text2text_colab.ipynb` is declared `TASK-INFERENCE` under DIMER Notebook Specification 1.0 (see `tutorials/README.md`). Its default path authors two already-prefixed inputs in code (no download; the pipeline invents no prefix), surfaces the ceilings, `DECISION_RULE` and `TASK_PREFIXES` before any model work, stages the git-ignored `model.safetensors` with `stage_missing_files(..., allow_download=True)` and digest-verifies the snapshot with `verify_snapshot`, generates through `T5BaseText2TextPipeline.generate` with explicit `max_new_tokens`/`num_beams`, reads `stopped_by`/`known_prefix`/token counts with their semantics (greedy argmax, no probability or score, no threshold), and exports a CSV plus JSON provenance. No metric is reported: the repository ships no metric helper and the sample has no reference outputs. BYOD is optional and gated off by default. See `docs/release-verification.md` for the release gate.
 
 ## Release status
 
-**Candidate / source-complete.** Unit tests, one executed CPU smoke run from the pinned snapshot, and the static card gate exist; no notebook and no clean-runtime notebook evidence. See `STATUS.md`.
+**Candidate.** Static/unit checks do not constitute clean-runtime notebook evidence. The clean-runtime run of the tutorial is pending; complete `docs/release-verification.md` against the exact release revision before calling the notebook release-grade. See `STATUS.md`.
 
 ## Licensing
 
