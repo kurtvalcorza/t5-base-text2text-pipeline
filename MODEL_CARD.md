@@ -20,7 +20,11 @@ base_model: google-t5/t5-base
 
 ## Interactive Colab Tutorials
 
-This release ships no tutorial notebook (`tutorials/` is absent). The package is exercised through its test suite (`tests/`) and the run instructions in the README; a `NOTEBOOK_SPEC` 1.0 `TASK-INFERENCE` notebook is a follow-up, not a claim this card makes.
+This pipeline provides a ready-to-run interactive Google Colab notebook that exercises the repository's public API end to end — bootstrap a fresh runtime, stage and verify the pinned upstream revision, validate an input, run the task, and inspect and export the outputs:
+
+- **Task Inference Tutorial**:  
+  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/t5-base-text2text-pipeline/blob/main/tutorials/t5_base_text2text_colab.ipynb) [`t5_base_text2text_colab.ipynb`](https://github.com/kurtvalcorza/t5-base-text2text-pipeline/blob/main/tutorials/t5_base_text2text_colab.ipynb)  
+  *Caller-prefixed text-to-text generation with the pinned `google-t5/t5-base` weights (`translate English to German: `, `summarize: `): greedy deterministic decoding with an explicit token budget; the pinned revision ships no `tokenizer_config.json` (6-file manifest); no metric is reported.*
 
 ---
 
@@ -62,7 +66,7 @@ Operating environment: Python 3.12 with `torch==2.14.0`, `transformers==4.57.6`,
 
 ###### Performance Measures
 
-The pipeline reports no performance measure, and ships no metric helper. Each result carries only descriptive fields: `text`, `generated_tokens`, `input_tokens`, `stopped_by` (`eos` or `max_new_tokens`) and `known_prefix`. Summarisation and translation quality are conventionally scored with ROUGE-1/2/L and BLEU (or chrF) against human reference outputs; those references do not exist for an arbitrary input, and a reference-free proxy (length ratio, copy rate) would say nothing about faithfulness, so none is manufactured here. A caller who needs a number must supply references for a held-out sample of their own inputs and a scorer; `stopped_by` tells them which outputs hit the token ceiling and should be excluded or re-run with a larger `max_new_tokens` before scoring. Upstream reports per-task scores for T5-Small in Table 14 of the paper (arXiv:1910.10683); this pipeline has not reproduced any of them and reports no quality figure of its own.
+The pipeline reports no performance measure, and ships no metric helper. Each result carries only descriptive fields: `text`, `generated_tokens`, `input_tokens`, `stopped_by` (`eos` or `max_new_tokens`) and `known_prefix`. Summarisation and translation quality are conventionally scored with ROUGE-1/2/L and BLEU (or chrF) against human reference outputs; those references do not exist for an arbitrary input, and a reference-free proxy (length ratio, copy rate) would say nothing about faithfulness, so none is manufactured here. A caller who needs a number must supply references for a held-out sample of their own inputs and a scorer; `stopped_by` tells them which outputs hit the token ceiling and should be excluded or re-run with a larger `max_new_tokens` before scoring. Upstream reports per-task scores for T5-Base in Table 14 of the paper (arXiv:1910.10683); this pipeline has not reproduced any of them and reports no quality figure of its own.
 
 ###### Decision thresholds
 
@@ -80,7 +84,7 @@ Upstream discloses that the checkpoint was pre-trained on C4 (the Colossal Clean
 
 ###### Human Life
 
-The pipeline is not intended for decisions in health, safety, criminal justice, employment, credit, housing or any other domain central to human life, and it has not been validated or certified for any of them by anyone. Its only validation is the offline unit suite (13 tests) and the CPU smoke run recorded in this repository. Where a sensitive use is foreseeable — summarising clinical notes, translating a legal notice, condensing a job application — it is admissible only with a human reading the generated text against the source before it is used, an independent evaluation on representative documents with references, and whatever regulatory clearance the domain requires; a T5-Small summary or translation must never be the record of what a source document said.
+The pipeline is not intended for decisions in health, safety, criminal justice, employment, credit, housing or any other domain central to human life, and it has not been validated or certified for any of them by anyone. Its only validation is the offline unit suite (13 tests) and the CPU smoke run recorded in this repository. Where a sensitive use is foreseeable — summarising clinical notes, translating a legal notice, condensing a job application — it is admissible only with a human reading the generated text against the source before it is used, an independent evaluation on representative documents with references, and whatever regulatory clearance the domain requires; a T5-Base summary or translation must never be the record of what a source document said.
 
 ###### Mitigations
 
