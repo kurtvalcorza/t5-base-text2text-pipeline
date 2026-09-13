@@ -266,9 +266,6 @@ class T5BaseText2TextPipeline:
         weights_dir: str | Path | None = None,
         allow_download: bool = False,
     ) -> T5BaseText2TextPipeline:
-        import torch
-        from transformers import T5ForConditionalGeneration, T5TokenizerFast
-
         root = Path(weights_dir) if weights_dir is not None else DEFAULT_WEIGHTS_DIR
         if (root / MANIFEST_NAME).is_file():
             stage_missing_files(root, allow_download=allow_download)
@@ -278,6 +275,10 @@ class T5BaseText2TextPipeline:
             location, kwargs, source = MODEL_ID, dict(revision=MODEL_REVISION), "hf-hub"
         else:
             raise FileNotFoundError(f"no verified snapshot at {root} and allow_download=False")
+        # Refuse invalid snapshots before importing model libraries.
+        import torch
+        from transformers import T5ForConditionalGeneration, T5TokenizerFast
+
         resolved_device = device or ("cuda:0" if torch.cuda.is_available() else "cpu")
         tokenizer = T5TokenizerFast.from_pretrained(location, trust_remote_code=False, **kwargs)
         model = T5ForConditionalGeneration.from_pretrained(
