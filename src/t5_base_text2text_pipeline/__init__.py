@@ -2,6 +2,7 @@ from .pipeline import (
     DECISION_RULE,
     DEFAULT_MAX_NEW_TOKENS,
     DEFAULT_WEIGHTS_DIR,
+    INPUT_SCHEMA,
     MAX_INPUT_TOKENS,
     MAX_NEW_TOKENS,
     MAX_NUM_BEAMS,
@@ -12,7 +13,10 @@ from .pipeline import (
     MODEL_REVISION,
     TASK_PREFIXES,
     T5BaseText2TextPipeline,
+    evaluation_report,
+    known_prefix,
     stage_missing_files,
+    validate_inputs,
     verify_snapshot,
 )
 
@@ -20,6 +24,7 @@ __all__ = [
     "DECISION_RULE",
     "DEFAULT_MAX_NEW_TOKENS",
     "DEFAULT_WEIGHTS_DIR",
+    "INPUT_SCHEMA",
     "MAX_INPUT_TOKENS",
     "MAX_NEW_TOKENS",
     "MAX_NUM_BEAMS",
@@ -30,6 +35,9 @@ __all__ = [
     "MODEL_REVISION",
     "TASK_PREFIXES",
     "T5BaseText2TextPipeline",
+    "evaluation_report",
+    "known_prefix",
     "stage_missing_files",
+    "validate_inputs",
     "verify_snapshot",
 ]

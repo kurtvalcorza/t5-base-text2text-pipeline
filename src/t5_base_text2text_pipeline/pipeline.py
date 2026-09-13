@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -110,6 +110,145 @@ def stage_missing_files(
     return missing
 
 
+INPUT_SCHEMA: dict[str, Any] = {
+    "input": "one non-empty str that already carries its task prefix; the pipeline prepends none",
+    "text_chars": [1, MAX_TEXT_CHARS],
+    "input_tokens": [1, MAX_INPUT_TOKENS],
+    "max_new_tokens": [1, MAX_NEW_TOKENS],
+    "num_beams": [1, MAX_NUM_BEAMS],
+    "task_prefixes": list(TASK_PREFIXES),
+    "decision_rule": DECISION_RULE,
+    "preprocessing": (
+        "SentencePiece encoding with no prefix added and no truncation: an input over "
+        "MAX_INPUT_TOKENS is rejected with a ValueError naming the count, never cut"
+    ),
+}
+
+
+def _check_inputs(text: Any, max_new_tokens: Any, num_beams: Any) -> str:
+    """Raise TypeError/ValueError naming the first violated ceiling; return the text.
+
+    The encoder-token ceiling is not checked here because it needs the loaded tokenizer;
+    ``_check_input_tokens`` applies it inside the pipeline once the count is known.
+    """
+    if not isinstance(text, str):
+        raise TypeError(f"text must be str, got {type(text).__name__}")
+    if not text.strip():
+        raise ValueError("text is empty")
+    if len(text) > MAX_TEXT_CHARS:
+        raise ValueError(f"text has {len(text)} chars; ceiling is MAX_TEXT_CHARS={MAX_TEXT_CHARS}")
+    for name, value, ceiling in (
+        ("max_new_tokens", max_new_tokens, MAX_NEW_TOKENS),
+        ("num_beams", num_beams, MAX_NUM_BEAMS),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError(f"{name} must be an int")
+        if not 1 <= value <= ceiling:
+            raise ValueError(f"{name} must be between 1 and {ceiling}, got {value}")
+    return text
+
+
+def _check_input_tokens(n_input: int) -> int:
+    """The encoder-token ceiling, applied once the tokenizer has counted."""
+    if n_input > MAX_INPUT_TOKENS:
+        raise ValueError(f"input is {n_input} tokens; ceiling is MAX_INPUT_TOKENS={MAX_INPUT_TOKENS}")
+    return n_input
+
+
+def known_prefix(text: str) -> str | None:
+    """Which trained task prefix ``text`` starts with, or ``None``; nothing is prepended."""
+    return next((prefix for prefix in TASK_PREFIXES if text.startswith(prefix)), None)
+
+
+def validate_inputs(
+    texts: Sequence[str],
+    *,
+    max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
+    num_beams: int = 1,
+    names: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Validation stage: return the input manifest (schema, per-input observations, verdict).
+
+    Rejection is reported by raising exactly as ``generate`` would: both route through
+    ``_check_inputs``. ``generate`` takes one text per call, so ``texts`` is the batch the notebook
+    will loop over and every entry is validated with the same settings. An input that starts with
+    no trained prefix is **not** rejected — the pipeline does not refuse it either — but the
+    manifest records ``known_prefix: null`` so the caller can see it. The encoder-token ceiling
+    (``MAX_INPUT_TOKENS``) needs the loaded tokenizer and is enforced inside ``generate``.
+    """
+    if isinstance(texts, str | bytes) or not isinstance(texts, Sequence):
+        raise TypeError("texts must be a sequence of str, not a single string")
+    if not texts:
+        raise ValueError("texts must hold at least one item")
+    checked = [_check_inputs(text, max_new_tokens, num_beams) for text in texts]
+    if names is not None and len(names) != len(checked):
+        raise ValueError("names must have one entry per text")
+    return {
+        "schema": dict(INPUT_SCHEMA),
+        "inputs": [
+            {
+                "id": names[i] if names else f"input{i:02d}",
+                "chars": len(text),
+                "known_prefix": known_prefix(text),
+            }
+            for i, text in enumerate(checked)
+        ],
+        "max_new_tokens": max_new_tokens,
+        "num_beams": num_beams,
+        "verdict": "accepted",
+        "findings": [],
+        "model_id": MODEL_ID,
+        "model_revision": MODEL_REVISION,
+    }
+
+
+def evaluation_report(
+    result: Mapping[str, Any], references: Sequence[str] | None = None, *, sample_kind: str = "synthetic"
+) -> dict[str, Any]:
+    """Evaluation stage: a machine-readable report even though no metric exists here.
+
+    The repository ships no metric helper, so the verdict is always ``not-measurable`` (EVAL9).
+    ``references`` exists for interface parity with the fleet's other pipelines and is recorded in
+    ``reason`` rather than scored: ROUGE and BLEU need a scorer and enough referenced items to state
+    a dispersion, and manufacturing a number from a proxy such as length ratio or copy rate would
+    misrepresent a plumbing check as a quality measurement.
+    """
+    generation = result.get("generation", {})
+    supplied = references is not None
+    return {
+        "task": "caller-prefixed text-to-text generation (summarisation, translation)",
+        "score_semantics": (
+            "the pipeline emits no probability, confidence or score: generated_tokens, input_tokens "
+            "and stopped_by are counts and flags, and "
+            f"{generation.get('decision_rule', DECISION_RULE)} produces some token at every step "
+            "with no minimum-probability cut-off and no shipped acceptance threshold"
+        ),
+        "sample_kind": sample_kind,
+        "n_generated_tokens": int(result.get("generated_tokens", 0)),
+        "metrics": [],
+        "baselines": [],
+        "verdict": "not-measurable",
+        "reason": (
+            "the repository ships no metric helper and a generation has no ground truth here"
+            + (
+                "; references were supplied but no metric helper exists to score them, and one "
+                "reference is not a dispersion"
+                if supplied
+                else "; the evaluated sample has no reference outputs"
+            )
+        ),
+        "needs": (
+            "reference outputs from the deployment domain — a reference summary per document, a "
+            "reference translation per sentence — over enough items to state a dispersion, scored "
+            "with the caller's own ROUGE-1/2/L or BLEU/chrF implementation, excluding or re-running "
+            "outputs whose stopped_by is max_new_tokens; no proxy such as length ratio or copy rate "
+            "substitutes for that"
+        ),
+        "model_id": MODEL_ID,
+        "model_revision": MODEL_REVISION,
+    }
+
+
 @dataclass
 class T5BaseText2TextPipeline:
     """``_runner(text, max_new_tokens, num_beams)`` -> ``(generated_text, generated_tokens, stopped_by)``;
@@ -164,24 +303,8 @@ class T5BaseText2TextPipeline:
         return cls(runner, count_tokens, resolved_device, source)
 
     def _validate(self, text: Any, max_new_tokens: Any, num_beams: Any) -> int:
-        if not isinstance(text, str):
-            raise TypeError(f"text must be str, got {type(text).__name__}")
-        if not text.strip():
-            raise ValueError("text is empty")
-        if len(text) > MAX_TEXT_CHARS:
-            raise ValueError(f"text has {len(text)} chars; ceiling is MAX_TEXT_CHARS={MAX_TEXT_CHARS}")
-        for name, value, ceiling in (
-            ("max_new_tokens", max_new_tokens, MAX_NEW_TOKENS),
-            ("num_beams", num_beams, MAX_NUM_BEAMS),
-        ):
-            if isinstance(value, bool) or not isinstance(value, int):
-                raise TypeError(f"{name} must be an int")
-            if not 1 <= value <= ceiling:
-                raise ValueError(f"{name} must be between 1 and {ceiling}, got {value}")
-        n_input = self._count_tokens(text)
-        if n_input > MAX_INPUT_TOKENS:
-            raise ValueError(f"input is {n_input} tokens; ceiling is MAX_INPUT_TOKENS={MAX_INPUT_TOKENS}")
-        return n_input
+        text = _check_inputs(text, max_new_tokens, num_beams)
+        return _check_input_tokens(self._count_tokens(text))
 
     def generate(
         self, text: str, *, max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS, num_beams: int = 1
@@ -191,13 +314,13 @@ class T5BaseText2TextPipeline:
         generated, n_generated, stopped_by = self._runner(text, max_new_tokens, num_beams)
         if not isinstance(generated, str) or not isinstance(n_generated, int):
             raise RuntimeError("runner must return (str, int, str)")
-        known_prefix = next((p for p in TASK_PREFIXES if text.startswith(p)), None)
+        prefix = known_prefix(text)
         return {
             "text": generated,
             "generated_tokens": n_generated,
             "input_tokens": n_input,
             "stopped_by": stopped_by,
-            "known_prefix": known_prefix,
+            "known_prefix": prefix,
             "generation": {
                 "max_new_tokens": max_new_tokens,
                 "num_beams": num_beams,
