@@ -3,6 +3,8 @@ license: apache-2.0
 model_card_spec: "1.1"
 pipeline_tag: text2text-generation
 base_model: google-t5/t5-base
+date_published: "2019-10"
+date_published_source: "google-research/text-to-text-transfer-transformer initial release 2019-10-23 (arXiv:1910.10683 v1 same day); Hub history begins 2019-12-12"
 ---
 
 # T5-Base (DIMER package v0.1.0) — Text-to-Text Transfer Transformer (Text2Text Generation)
@@ -11,7 +13,6 @@ base_model: google-t5/t5-base
 [![Upstream GitHub](https://img.shields.io/badge/Upstream%20GitHub-google--research%2Ftext--to--text--transfer--transformer-181717?style=flat&logo=github&logoColor=white)](https://github.com/google-research/text-to-text-transfer-transformer)
 [![arXiv Paper](https://img.shields.io/badge/arXiv-1910.10683-b31b1b.svg)](https://arxiv.org/abs/1910.10683)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Pipeline](https://img.shields.io/badge/Pipeline-t5--base--text2text--pipeline-2ea44f?style=flat&logo=github)](https://github.com/kurtvalcorza/t5-base-text2text-pipeline)
 
 > [!WARNING]
 > ⚠️ **Provided for research, training, and evaluation purposes only.** Model weights are redistributed unmodified under their upstream license, which controls your use, including any commercial use or redistribution; the accompanying code and notebooks are released under this repository's license. All of it is supplied **"as is"**, without warranty of any kind, and has not been validated for production, clinical, or safety-critical use. Running the notebooks downloads third-party weights and datasets governed by their own licenses and consumes compute on your own Colab/Kaggle account. To the maximum extent permitted by law, the maintainers of this repository and the DIMER platform accept no liability for any damages arising from their use. Hosting implies no affiliation with or endorsement by the original authors.
@@ -28,7 +29,7 @@ This pipeline provides a ready-to-run interactive Google Colab notebook that exe
 
 ---
 
-###### Description
+#### Description
 
 `google-t5/t5-base` is the 220-million-parameter checkpoint of the original Text-To-Text Transfer Transformer released by Raffel et al. (JMLR 21(140), 2020; arXiv:1910.10683), pinned here to revision `a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1`. It is a standard encoder-decoder Transformer: 12 encoder and 12 decoder layers, `d_model` 768, 12 attention heads of width 64, feed-forward width 3072, relative position biases with 32 buckets instead of absolute position embeddings, and a shared SentencePiece vocabulary of 32,128 pieces (`spiece.model`, byte-identical to T5-Small's, 100 of them sentinel `<extra_id_N>` tokens) — all read from the snapshot `config.json` and `tokenizer.json` (this snapshot ships no `tokenizer_config.json`; `T5TokenizerFast` loads from `tokenizer.json` with its class defaults, and the smoke run confirmed pad 0 / EOS 1 decoding). The checkpoint was pre-trained with a span-corruption denoising objective on C4 and simultaneously on a supervised multi-task mixture in which every task is cast as text in, text out, with a plain-language prefix naming the task (upstream README, "Training Details"); this is the pre-FLAN T5, not an instruction-tuned model. At inference the encoder reads the prefixed input once, then the decoder emits one SentencePiece token per step, starting from the pad token (`decoder_start_token_id` 0) and stopping at `</s>` (id 1) or a step ceiling; nothing is adapted, fine-tuned or conditioned beyond the text the caller supplies. What this repository adds is packaging: the `T5BaseText2TextPipeline` class in `src/t5_base_text2text_pipeline/pipeline.py`, digest verification of the local snapshot (`verify_snapshot`, `stage_missing_files`), input validation with named ceilings, a fixed output contract, and no task prefixes of its own — the caller writes `summarize: ` or `translate English to German: ` in front of the text.
 
@@ -60,7 +61,7 @@ There is no physical sensor: the training data was produced by software. C4 was 
 
 ###### Environment
 
-Operating environment: Python 3.12 with `torch==2.14.0`, `transformers==4.57.6`, `tokenizers==0.22.2`, `sentencepiece==0.2.2` (exact pins in `pyproject.toml`); `from_pretrained` picks `cuda:0` when available, else CPU, and loads the weights in float32 on both. Measured on this repository's smoke run (Windows venv `dimer-next16`, `CUDA_VISIBLE_DEVICES=-1`, `device="cpu"` passed explicitly, Intel Core Ultra 9 275HX): loading and digest-verifying the 894 MB snapshot took 4.55 s; `translate English to German: The house is wonderful.` (11 input tokens) generated 5 tokens in 0.29 s greedy and 0.21 s with `num_beams=4`, both yielding `Das Haus ist wunderbar.`; a 94-token `summarize: ` input (`max_new_tokens=48`) generated 40 tokens in 0.83 s and stopped at `</s>` with a two-sentence output. The same three calls through the `t5-small-text2text-pipeline` sibling on the same CPU took 0.16 s, 0.31 s and 0.09 s (T5-Base is 1.8×, 2.7× and 2.3× slower) after a 3.89 s load of its 244 MB snapshot; per generated token the summarisation step cost 21 ms here against 6.5 ms for T5-Small. CUDA and the Hub-download path were not executed. Data environment: inputs are assumed to be well-formed English prose of the kind found on the filtered web (news, encyclopaedic, expository text) and, for translation, single sentences; summaries of text much shorter than a paragraph degenerate into near-copies, inputs above 512 tokens are refused, and text far from web English (code, tables, transcripts, other languages) yields output the pipeline cannot flag as degraded.
+Operating environment: Python 3.12 with `torch==2.14.0`, `torchvision==0.29.0`, `torchaudio==2.11.0`, `transformers==4.57.6`, `tokenizers==0.22.2`, `sentencepiece==0.2.2` (exact pins in `pyproject.toml`); `from_pretrained` picks `cuda:0` when available, else CPU, and loads the weights in float32 on both. Measured on this repository's smoke run (Windows venv `dimer-next16`, `CUDA_VISIBLE_DEVICES=-1`, `device="cpu"` passed explicitly, Intel Core Ultra 9 275HX): loading and digest-verifying the 894 MB snapshot took 4.55 s; `translate English to German: The house is wonderful.` (11 input tokens) generated 5 tokens in 0.29 s greedy and 0.21 s with `num_beams=4`, both yielding `Das Haus ist wunderbar.`; a 94-token `summarize: ` input (`max_new_tokens=48`) generated 40 tokens in 0.83 s and stopped at `</s>` with a two-sentence output. The same three calls through the `t5-small-text2text-pipeline` sibling on the same CPU took 0.16 s, 0.31 s and 0.09 s (T5-Base is 1.8×, 2.7× and 2.3× slower) after a 3.89 s load of its 244 MB snapshot; per generated token the summarisation step cost 21 ms here against 6.5 ms for T5-Small. CUDA and the Hub-download path were not executed. Data environment: inputs are assumed to be well-formed English prose of the kind found on the filtered web (news, encyclopaedic, expository text) and, for translation, single sentences; summaries of text much shorter than a paragraph degenerate into near-copies, inputs above 512 tokens are refused, and text far from web English (code, tables, transcripts, other languages) yields output the pipeline cannot flag as degraded.
 
 #### Metrics
 
@@ -119,7 +120,7 @@ The pipeline must not be used for surveillance, profiling or social scoring — 
 
 ## Runtime
 
-- Pins: `torch==2.14.0`, `transformers==4.57.6`, `tokenizers==0.22.2`, `sentencepiece==0.2.2`, `huggingface-hub==0.36.2`, `safetensors==0.8.0`, `numpy==2.5.3`; Python 3.12.
+- Pins: `torch==2.14.0`, `torchvision==0.29.0`, `torchaudio==2.11.0`, `transformers==4.57.6`, `tokenizers==0.22.2`, `sentencepiece==0.2.2`, `huggingface-hub==0.36.2`, `safetensors==0.8.0`, `numpy==2.5.3`; Python 3.12.
 - Precision: float32 on both CPU and CUDA; decoding greedy by default, beam search on request, sampling disabled; upstream `task_specific_params` (min_length, length_penalty, no_repeat_ngram_size) not applied.
 - Measured (Windows venv `dimer-next16`, torch 2.14.0+cu130 build, `CUDA_VISIBLE_DEVICES=-1`, `HF_HUB_OFFLINE=1`): device `cpu`, source `local-snapshot`, load + verify 4.55 s; translate 11 → 5 tokens in 0.29 s (greedy) / 0.21 s (4 beams), output `Das Haus ist wunderbar.`; summarise 94 → 40 tokens in 0.83 s, stopped by `eos`; total 5.88 s; no loader warnings.
 - Tests: `pytest -q -o addopts= tests` — 13 passed, offline, no weights required; `ruff check src tests` clean.
