@@ -2,6 +2,7 @@
 license: apache-2.0
 model_card_spec: "1.1"
 pipeline_tag: text2text-generation
+task: "Others - Text-to-Text Generation"
 base_model: google-t5/t5-base
 date_published: "2019-10"
 date_published_source: "google-research/text-to-text-transfer-transformer initial release 2019-10-23 (arXiv:1910.10683 v1 same day); Hub history begins 2019-12-12"
