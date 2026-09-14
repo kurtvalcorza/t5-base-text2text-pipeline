@@ -7,7 +7,7 @@ date_published: "2019-10"
 date_published_source: "google-research/text-to-text-transfer-transformer initial release 2019-10-23 (arXiv:1910.10683 v1 same day); Hub history begins 2019-12-12"
 ---
 
-# T5-Base (DIMER package v0.1.0) — Text-to-Text Transfer Transformer (Text2Text Generation)
+# T5-Base — Text-to-Text Transfer Transformer (Text2Text Generation)
 
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-google--t5%2Ft5--base-ffcc4d?style=flat)](https://huggingface.co/google-t5/t5-base)
 [![Upstream GitHub](https://img.shields.io/badge/Upstream%20GitHub-google--research%2Ftext--to--text--transfer--transformer-181717?style=flat&logo=github&logoColor=white)](https://github.com/google-research/text-to-text-transfer-transformer)
