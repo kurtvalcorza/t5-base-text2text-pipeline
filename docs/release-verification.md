@@ -1,45 +1,58 @@
 # Release verification
 
-`tutorials/t5_base_text2text_colab.ipynb` (`TASK-INFERENCE`) is a **release candidate** until
-the exact notebook revision has executed top-to-bottom in a clean supported runtime. Unit tests,
-JSON validation, code-cell compilation, and `tools/validate_release_assets.py` are necessary
-checks but are **not** runtime evidence under DIMER Notebook Specification 1.1. This file is
-the durable release-gate record for the notebook.
+`tutorials/t5_base_text2text_colab.ipynb` (`E2E`, **standalone** carrier) is a **release candidate** until the
+exact notebook revision has executed top-to-bottom in a clean supported runtime. Unit tests, JSON validation,
+code-cell compilation, the generator parity checks and `tools/validate_release_assets.py` are necessary checks but
+are **not** runtime evidence under DIMER Notebook Specification 2.0 (REL8). This file is the durable release-gate
+record for the notebook.
 
 ## Automatic coverage (static, every pull request)
 
 CI runs `tools/validate_release_assets.py`, which checks:
 
-- notebook JSON parses; every code cell compiles as plain Python (no `%`/`!` magics); no
-  persisted outputs or execution counts; no unresolved placeholder markers; every code cell
-  is preceded by an explanatory markdown cell;
-- exactly one tutorial notebook, named in `tutorials/README.md` with its `TASK-INFERENCE`
-  profile, the notebook-spec version and the standalone carrier; `metadata.dimer` declares that profile, spec `1.1`,
+- notebook JSON parses; every code cell compiles as plain Python (no `%`/`!` magics); no persisted outputs or
+  execution counts; no unresolved placeholder markers; every code cell is preceded by an explanatory markdown cell;
+- exactly one tutorial notebook, named in `tutorials/README.md` with its `E2E` profile, the notebook-spec version
+  and the standalone carrier; `metadata.dimer` declares that profile, spec `2.0`, a §3.3 pedagogical mode,
   `standalone: true` and `generated_from` (repository, revision, module SHA-256, generator);
-- the standalone carrier (ST1–ST6, PAR1–PAR3): no clone, repository install or repository import on the primary
-  path; exactly one cell tagged `embedded_module` equal to `src/t5_base_text2text_pipeline/pipeline.py` after the generator's documented
-  rewrites; the inline `MANIFEST` equal to the committed 6-entry snapshot manifest and the inline `PINS` equal to
-  the `pyproject.toml` runtime pins; the notebook byte-identical to `tools/build_notebook.py` output; the pinned-install
-  cell with its restart-on-stale-import guard; `NOTEBOOK_SOURCE` recorded in exports;
-- `MODEL_ID`/`MODEL_REVISION` are bound only in the carried module cell (and repeated in the inline manifest, which the
-  notebook asserts against the module before fetching), the revision is
-  a 40-hex immutable commit, and the same identity string appears in `README.md`,
-  `MODEL_CARD.md`, and `docs/WEIGHTS.md` with no stray revisions;
+- the standalone carrier (ST1–ST8, PAR1–PAR4): no clone, repository install or repository import on the primary
+  path; one cell per carried module (`pipeline.py`, `samples.py`, `metrics.py`), each equal to its source after the
+  generator's documented rewrites; the inline `MANIFEST` equal to the committed 7-entry snapshot manifest and the
+  inline `PINS` equal to the `pyproject.toml` runtime pins; the notebook byte-identical (on LF) to
+  `tools/build_notebook.py` output for its recorded revision; the pinned-install cell with its
+  restart-on-stale-import guard; `NOTEBOOK_SOURCE` recorded in exports;
+- `MODEL_ID`/`MODEL_REVISION` bound only in the carried module cell (and repeated in the inline manifest, which the
+  notebook asserts against the module before fetching), the revision a 40-hex immutable commit, and the same
+  identity string in `README.md`, `MODEL_CARD.md` and `docs/WEIGHTS.md` with no stray revisions (the pinned corpus
+  commit is the one allowed second hash);
 - the profile-specific public-API calls (`stage_missing_files`, `verify_snapshot`,
-  `T5BaseText2TextPipeline.from_pretrained(weights_dir=...)`, `validate_inputs`, `generate(text, max_new_tokens=..., num_beams=...)`, `evaluation_report`), the ceiling print
-  (`MAX_TEXT_CHARS`, `MAX_INPUT_TOKENS`, `MAX_NEW_TOKENS`, `MAX_NUM_BEAMS`, `DEFAULT_MAX_NEW_TOKENS`, `DECISION_RULE`, `TASK_PREFIXES`), the exports, the learner-facing statements (original T5 not FLAN, the pipeline invents no prefix, greedy argmax as the default decision rule, no probability or score emitted, no metric helper and the verdict always `not-measurable`, inputs above the token ceiling rejected not truncated, named exclusions) and the
-  gated-off BYOD default listed in the validator; forbidden patterns (credential-in-URL, any `git clone` /
-  `github.com` / repository import on the primary path, a mutable `revision='main'`, direct
-  `from transformers import` / `T5ForConditionalGeneration` / `T5TokenizerFast` / `from huggingface_hub import` /
-  `model.generate(` use **outside the carried module cell**,
-  `trust_remote_code=True`, `pickle.load`, `torch.load(`, `extractall(`);
-- `STATUS.md`, `README.md` and `tutorials/README.md` agree on one release-status token and no
-  document makes an unsupported release-grade, production-readiness or benchmark claim;
-- `MODEL_CARD.md` front matter (`model_card_spec: "1.1"`), single H1, required heading order, and
-  immutable provenance.
+  `T5BaseText2TextPipeline.from_pretrained(weights_dir=...)`, `fetch_corpus` from the pinned cache path,
+  `read_corpus` + `build_sample_dataset(seed=SPLIT_SEED)` / `load_byod_dataset`, `validate_dataset` per split,
+  `check_split_disjoint`, `known_prefix(PREFIX)`, `write_dataset_csv`, `validate_inputs` with the `num_beams` refusal
+  probe, `pipe.generate` with the sanity checks on trained prefixes and the new-prefix probe, `lead_baseline`,
+  `pipe.evaluate` on the frozen model under the new prefix and under `summarize: ` and on the validation and test
+  splits after adaptation with the ROUGE-L assertion, `pipe.adapt` with its explicit hyperparameters, `prefix=PREFIX`
+  and `eval_generation=GEN`, `pipe.evaluate` on the unseen abstracts plus the single-item `evaluation_report` and
+  the trained-prefix re-check, `pipe.save_artifact`, `T5BaseText2TextPipeline.from_artifact` and the reload-parity
+  assertion, and the provenance fields `weight_format`, `weight_sha256` and the `corpus` block), the six expected
+  `outputs/` paths, the learner-facing statements (no score emitted, greedy decoding, adaptation to a new prefix, a
+  prefix the checkpoint has never seen, the Lead-1 baseline, rouge-score-style not rouge-score-identical, no
+  dispersion estimate, inputs above the token ceiling rejected not truncated, named exclusions, the Apache-2.0 corpus
+  licence) and the gated-off BYOD default; forbidden patterns (credential-in-URL, any `git clone` / `github.com` /
+  repository import on the primary path, a mutable `revision='main'`, direct `from transformers import` /
+  `T5ForConditionalGeneration` / `T5TokenizerFast` / `model.generate(` / `from huggingface_hub import` /
+  `urllib.request` / `safetensors` / `torch.optim` / `.backward(` / `pipe._model` use **outside the carried module
+  cells**, `trust_remote_code=True`, `pickle.load`, `torch.load(` without `weights_only=True`, `extractall(`);
+- `STATUS.md`, `README.md` and `tutorials/README.md` agree on one release-status token and no document makes an
+  unsupported release-grade, production-readiness or benchmark claim;
+- `MODEL_CARD.md` front matter (`model_card_spec: "1.1"`), single H1, the 19 required headings in order, and the
+  immutable provenance section.
 
-CI also installs the pinned CPU-only torch wheel plus `transformers`, `tokenizers`, `sentencepiece`, `huggingface-hub`, `safetensors` and `numpy`, runs `ruff`, `tools/build_notebook.py --check`, and the
-offline unit suite (`tests/test_pipeline.py`, `tests/test_role_helpers.py`, `tests/test_notebook_parity.py`; injected runner and token counter, no weights). These are
+CI also installs the pinned CPU-only torch wheel plus `transformers`, `tokenizers`, `sentencepiece`,
+`huggingface-hub`, `safetensors` and `numpy`, runs `ruff check src tests tools`, `tools/build_notebook.py --check`,
+and the offline unit suite (`tests/test_pipeline.py`, `tests/test_adaptation.py`, `tests/test_role_helpers.py`,
+`tests/test_import_boundary.py`, `tests/test_notebook_parity.py`; injected runner, token counter and corpus fetcher,
+temporary manifests, no weights — `tests/test_model_backed.py` is skipped without the snapshot). These are
 source/provenance and unit checks. They are **not** execution evidence.
 
 ## Executor paths
@@ -47,69 +60,103 @@ source/provenance and unit checks. They are **not** execution evidence.
 | Path | Runtime | Role |
 |---|---|---|
 | Google Colab (supported user path) | Colab CPU runtime (CUDA used automatically when present) | The runtime the tutorial is written for; a clean top-to-bottom run here is promotion evidence |
-| Kaggle CLI kernel | Kaggle CPU kernel, Python 3.12 image | Reproducible clean-room executor of the same class; the notebook is pushed verbatim plus one leading shim cell that provides `google.colab` and chdirs to a scratch directory (no repository checkout is needed — the notebook is standalone) |
-| Local Windows-venv harness (pre-flight only) | Workstation, sequential cell executor with a `google.colab` shim, `CUDA_VISIBLE_DEVICES=-1` | Builder pre-flight to catch defects before spending cloud runs; **not** a supported runtime and not promotion evidence |
+| Kaggle CLI kernel or equivalent fresh container | Fresh CPU or GPU container, Python 3.12 image; the committed notebook executed verbatim in a fresh interpreter with a `google.colab` shim and **no repository checkout** (the notebook is standalone) | Reproducible clean-room executor of the same class; promotion evidence |
+| Local harness (pre-flight only) | Workstation, sequential cell executor with a `google.colab` shim, pre-staged pins | Builder pre-flight to catch defects before spending cloud runs; **not** a supported runtime and **not** promotion evidence |
 
 ## Supported release verification procedure
 
 Before changing the registry status from `Candidate` to `Release-grade`:
 
 1. resolve the exact PR/commit head under review and confirm static CI is green;
-2. open that exact notebook revision in a new CPU (or CUDA) runtime (Colab, or the Kaggle
-   executor above) with **no repository checkout** and a clean model cache;
-3. run the notebook top-to-bottom without editing implementation cells (form parameters at their
-   defaults for the sample path: `USE_BYOD = False`, `GEN_MAX_NEW_TOKENS = 64`, `NUM_BEAMS = 1`);
+2. open that exact notebook revision in a new CPU or CUDA runtime (Colab, or a fresh-container executor above) with
+   **no repository checkout**, an empty Hugging Face cache, and no pre-staged files under the working-directory
+   snapshot `weights/t5-base/` or the corpus cache `weights/scitldr/` (the standalone path writes the manifest
+   itself, stages the missing files from the Hub, and fetches the three pinned SciTLDR-A files from the project
+   repository, so neither directory may be seeded);
+3. run the notebook top-to-bottom without editing implementation cells (form parameters at their defaults:
+   `USE_BYOD = False`, `SPLIT_SEED = 42`, `PREFIX = 'paper title: '`, `GEN_MAX_NEW_TOKENS = 24`, `NUM_BEAMS = 4`,
+   `EPOCHS = 2`, `LEARNING_RATE = 5e-4`, `BATCH_SIZE = 8`, `TRAINABLE_DECODER_LAYERS = 4`);
 4. verify that Section 1 reports `NOTEBOOK_SOURCE.repository_revision` equal to the revision recorded in
    `metadata.dimer.generated_from` and that the installed core package versions equal the inline `PINS`
-   (= `pyproject.toml`);
+   (= `pyproject.toml`): `torch==2.14.0`, `transformers==4.57.6`, `tokenizers==0.22.2`, `sentencepiece==0.2.2`,
+   `huggingface-hub==0.36.2`, `safetensors==0.8.0`, `numpy==2.5.3` (an interpreter restart after the install is
+   expected where the runtime's preinstalled torch or numpy differ from the pins);
 5. verify every default-path stage completes:
    - pinned runtime installed from the inline `PINS` with no GitHub access;
-   - the carried module cell executing (defining `T5BaseText2TextPipeline`, `validate_inputs`, `evaluation_report` and the ceilings) with no import of the repository package;
-   - the two synthetic prefixed inputs authored in code with their text SHA-256 printed, and the ceilings (`MAX_TEXT_CHARS` 20000, `MAX_INPUT_TOKENS` 512, `MAX_NEW_TOKENS` 512, `MAX_NUM_BEAMS` 8, `DEFAULT_MAX_NEW_TOKENS` 64), `DECISION_RULE` and the four `TASK_PREFIXES` surfaced, and `validate_inputs` writing `outputs/t5_base_text2text_input_manifest.json` (verdict `accepted`, both inputs recognised by a known prefix, one recorded rejection finding from the `num_beams` ceiling probe);
-   - pinned `google-t5/t5-base` acquisition at the immutable revision through the carried module, the inline `MANIFEST` asserted against the module identity and written to `weights/t5-base/`:
-     `stage_missing_files(WEIGHTS_DIR, allow_download=True)` reports `['model.safetensors']` on a
-     clean runtime, `verify_snapshot` returns its dict (6 files; no `tokenizer_config.json` exists at this revision and the tokenizer load must print no warning, as in the card-pass smoke), and `from_pretrained(weights_dir=WEIGHTS_DIR)`
-     loads from the verified directory with `source` `local-snapshot`;
-   - `generate` returning, per input, `text`, `input_tokens`, `generated_tokens`, `stopped_by`, `known_prefix` and the echoed `generation` settings, with every sanity check `True`; record the two outputs, token counts and `stopped_by` values (the card-pass CPU smoke returned `Das Haus ist wunderbar.` for the translation, 11 → 5 tokens stopped by `eos`; a different output on another runtime is a finding to record, not a failure by itself, because no metric is asserted);
-   - `evaluation_report` writing `outputs/t5_base_text2text_evaluation_report.json` with verdict `not-measurable` and an empty
-     `metrics` list, and the "No metric is reported" line printed;
-   - `outputs/t5_base_text2text_result.json` and `outputs/t5_base_text2text_generations.csv` written with `NOTEBOOK_SOURCE`, model revision,
-     model licence, runtime versions and device;
+   - the three carried module cells execute (defining `T5BaseText2TextPipeline`, `verify_snapshot`,
+     `stage_missing_files`, `validate_inputs`, `evaluation_report`, `known_prefix`, `fetch_corpus`, `read_corpus`,
+     `build_sample_dataset`, `filter_records`, `validate_dataset`, `check_split_disjoint`, `split_dataset`,
+     `load_byod_dataset`, `write_dataset_csv`, `rouge_n`, `rouge_l`, `text_metrics`, `lead_baseline` and the
+     ceilings) with no import of the repository package;
+   - the inline manifest asserted against the module's constants, then `stage_missing_files(WEIGHTS_DIR,
+     allow_download=True)` reporting `['model.safetensors']` (and any other absent entry) fetched from
+     `google-t5/t5-base` at the immutable revision, and `verify_snapshot` returning its dict (7 files);
+     `from_pretrained(weights_dir=WEIGHTS_DIR)` loading from the verified directory with `source` `local-snapshot`;
+   - Section 4: `fetch_corpus` fetching the three pinned files (3,155,015 / 1,124,865 / 1,204,107 bytes) from
+     `raw.githubusercontent.com` into `weights/scitldr/`, 1,992 + 619 + 618 raw papers read, `prefix_is_trained`
+     `False`, and the seeded draw of 300 / 50 / 100 records with `check_split_disjoint` reporting no shared abstract
+     and the three dataset digests `eadcee41…` / `6139c992…` / `ea8cb17c…`; `outputs/…_train.csv` written; the four
+     dataset refusal probes each raising `ValueError`;
+   - Section 5: the ceilings (`MAX_TEXT_CHARS` 20000, `MAX_INPUT_TOKENS` 512, `MAX_NEW_TOKENS` 512, `MAX_NUM_BEAMS`
+     8, `DEFAULT_MAX_NEW_TOKENS` 64, `MAX_PREFIX_CHARS` 64), `DECISION_RULE` and `TASK_PREFIXES` surfaced;
+     `validate_inputs` writing `outputs/…_input_manifest.json` (verdict `accepted`, one recorded rejection finding
+     from the `num_beams` ceiling probe); `pipe.generate` on the German-translation and `summarize: ` inputs with
+     every sanity check `True` (the card-pass smoke gave `Das Haus ist wunderbar.`), then the new-prefix probe on
+     one test abstract returning a one-word answer (`True` in the recorded run);
+   - Section 6: the Lead-1 baseline (ROUGE-L ≈ 14.08 on the sample), the frozen model under `paper title: `
+     (ROUGE-L ≈ 0.71 at ≈ 1 word) and under `summarize: ` (ROUGE-L ≈ 18.99 at ≈ 16.7 words) against
+     ≈ 7.4-word titles on CPU float32, with the cell's assertion that the Lead-1 ROUGE-1 is positive;
+   - Section 7: `pipe.adapt` printing epoch 0 as the frozen model, 37,757,952 trainable of 222,903,552 parameters,
+     300 training abstracts, and a two-epoch history with validation ROUGE-L rising from near zero into the
+     thirties (≈ 0.73 → 33.11 → 35.32 in the recorded run; `best_epoch` 2);
+   - Section 8: `pipe.evaluate` on the validation and test splits with the four-way comparison and
+     `outputs/…_evaluation_report.json` written (the cell asserts the adapted test ROUGE-L exceeds the frozen one
+     under the same prefix — on the sample ≈ 29.97 versus ≈ 0.71, at ≈ 6.5 words);
+   - Section 9: four unseen dev abstracts titled with `pipe.evaluate` returning `measured-small-sample`, the
+     single-item `evaluation_report` verdict `sample-sanity`, the German translation generated again after
+     adaptation (printed beside the frozen output; a change is a finding to record, not a failure),
+     `outputs/…_generations.csv` written; `pipe.save_artifact` writing `outputs/…_adapter/{adapter.safetensors,
+     manifest.json}` (52 tensors, about 151 MB, `prefix` recorded) and `T5BaseText2TextPipeline.from_artifact`
+     reloading it with 6/6 identical outputs (the cell asserts it); `outputs/…_result.json` written with
+     `NOTEBOOK_SOURCE`, the model identity and licence, the snapshot block (`weight_format`, `weight_sha256`), the
+     prefix, the `corpus` block, the inference-contract items, the comparison, the artifact digest, the reload parity,
+     the runtime versions and device;
 6. verify the exports exist and the interpretation section matches the observed path;
-7. record the notebook Git blob id, commit, runtime (platform, Python, PyTorch, Transformers, device),
-   model identifier and immutable revision, whether the model cache was clean, outcome, produced
-   outputs, and any warning or applicable `SHOULD` deviation in the table below;
+7. record the notebook Git blob id, commit, runtime (platform, Python, PyTorch, Transformers, device), the model
+   identifier and immutable revision, whether the model cache, the weights directory and the corpus cache were clean,
+   outcome, produced outputs, the observed metrics (as observations, not a benchmark) and any warning or applicable
+   `SHOULD` deviation in the tables below;
 8. record no access tokens or other secrets.
 
-A known-failing default path in the supported runtime blocks release.
+A known-failing default path in the supported runtime blocks release (REL11).
+
+## Manual clean-runtime evidence
+
+| Notebook | Commit / notebook blob | Date (UTC) | Executor | Outcome |
+|---|---|---|---|---|
+| `t5_base_text2text_colab.ipynb` (`E2E`) | `__LOCAL_ROW__` | 2026-09-19 | Local pre-flight harness (Windows, CPython 3.12.10, CPU, `google.colab` shim, pins pre-installed) | PASS — pre-flight only, **not** promotion evidence |
+| `t5_base_text2text_colab.ipynb` (`TASK-INFERENCE`, superseded) | `198685c` / `fbc9be0e4069` | 2026-09-14 | Kaggle CPU (`kurtvalcorza/dimer-nb2-t5-base-text2text` v1) | PASSED — 8/8 code cells, 285.0 s; evidence for the earlier inference-only notebook, not for the `E2E` blob |
 
 ## Recorded executions
 
 Notebook identity is the Git blob id of `tutorials/t5_base_text2text_colab.ipynb` (verify with
-`git rev-parse <commit>:tutorials/t5_base_text2text_colab.ipynb`). Wall times, when recorded,
-are the sum of per-cell times reported by the executor and include installs and the model download;
-they are measurements for the stated runtime, not general estimates.
-
-### Manual clean-runtime evidence
+`git rev-parse <commit>:tutorials/t5_base_text2text_colab.ipynb`). Wall times are the sum of per-cell times
+reported by the executor and include the model download where it occurred; they are measurements for the stated
+runtime, not general estimates.
 
 | Date (UTC) | Commit / notebook blob | Executor | Path exercised | Wall | Outcome |
 |---|---|---|---|---|---|
-| 2026-09-14 | `198685c` / `fbc9be0e4069` | Kaggle CPU (`kurtvalcorza/dimer-nb2-t5-base-text2text` v1) | Default sample path | 285.0 s | **PASSED** — 8/8 ok code cells executed cleanly, 14 files, 894 MB staged |
+| 2026-09-19 | `__LOCAL_ROW__` | Local pre-flight harness (Windows, CPython 3.12.10, CPU float32, `torch 2.14.0+cu130` with `CUDA_VISIBLE_DEVICES=-1`, `transformers 4.57.6`) | `__LOCAL_EXEC__` |
+| 2026-09-14 | `198685c` / `fbc9be0e4069` (`TASK-INFERENCE`, superseded) | Kaggle CPU (`kurtvalcorza/dimer-nb2-t5-base-text2text` v1) | Default sample path of the inference-only notebook: two synthetic prefixed inputs, `stage_missing_files` fetching `model.safetensors` from the Hub, `verify_snapshot`, `generate`, `not-measurable` report | 285.0 s | **PASSED** — 8/8 code cells, 14 files, 894 MB staged; does not cover the `E2E` blob |
 
 ## Current status
 
-No clean-runtime execution of the notebook has been recorded yet; the run is **pending** and queued
-to the GPU lane. Static validation (`tools/validate_release_assets.py`), nbformat validation, a
-`compile()` sweep over every code cell, and the offline unit suite passed on the tutorial source at
-the candidate revision, which is necessary but not sufficient. The registry status remains
-**Candidate** until a reviewer confirms a recorded run against the notebook blob under review and
-an integrator promotes it; promotion is not performed by the builder. Facts a reviewer should weigh:
-`stage_missing_files` was exercised only with an injected downloader in the unit suite (the real
-`hf_hub_download` fetch into the snapshot directory has not been executed), and the card pass executed `generate` only on CPU in the Windows venv from a complete local snapshot (returns/L6: CUDA path and Hub path not executed), so the clean run will be the first real execution of the staging path; the CPU inference path against real weights was executed once locally (card Runtime: 4.55 s load + verify, 0.29 s translation, 0.83 s summarisation).
-
-**The standalone carrier itself — executing the carried module cell in a runtime that has no repository
-checkout — has been validated statically only (parity PASS) and never run end-to-end.** A carrier probe
-did exec the install, carried-module and identity-assert cells in a fresh interpreter with the repository
-package blocked on `sys.meta_path`, which confirms the cells define the public API without the package;
-it fetched nothing and loaded no model. The clean run will therefore be the first execution of the
-standalone path.
+The `E2E` notebook source is complete and passes all static checks, including the generator parity checks
+(`--check` OK). A local pre-flight execution of the committed blob completed the whole default path on CPU — corpus
+read from the cache, validation and split, the inference contract plus the new-prefix probe, the Lead baseline and the
+frozen model under two prefixes, two epochs of decoder fine-tuning, held-out evaluation, unseen-abstract generation
+with the trained-prefix re-check, adapter export and reload parity — which catches defects but is **not** a supported
+runtime under REL1/REL10, and it ran with the snapshot and the three SciTLDR files pre-staged, so neither the 892 MB Hub
+fetch nor the corpus download has been exercised by this notebook end to end; the earlier `TASK-INFERENCE` Kaggle run
+did exercise the Hub fetch and digest check of the same snapshot. The repository stays at **Candidate** until a Colab
+or fresh-container run of the exact `E2E` release revision is recorded above.
