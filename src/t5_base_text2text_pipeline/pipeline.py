@@ -2,15 +2,23 @@
 
 The class loads weights only from a digest-verified local snapshot (``weights/t5-base/``) or, when
 explicitly allowed, from the Hugging Face Hub at the pinned revision. The caller supplies the task
-prefix (``summarize: ``, ``translate English to German: `` ...); this module never adds one.
+prefix (``summarize: ``, ``translate English to German: `` ...); this module never adds one at inference.
+
+The adaptation contract (``evaluate``, ``adapt``, ``save_artifact``, ``from_artifact``) teaches a
+caller-chosen prefix: it fine-tunes the last decoder blocks on a validated ``{id, source, targets}`` dataset
+whose sources are prepended with that prefix, selects the epoch by validation ROUGE-L, and exports the
+trained tensors as a safetensors adapter bound to the pinned base weights. The inference contract above is
+unchanged by it.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
+import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +35,22 @@ DEFAULT_MAX_NEW_TOKENS = 64
 MAX_TEXT_CHARS = 20_000  # pre-tokenisation guard on the input string
 MAX_NUM_BEAMS = 8
 DECISION_RULE = "greedy argmax per decoding step (num_beams=1); beam search when num_beams > 1; no sampling"
+WEIGHT_FILE = "model.safetensors"
+WEIGHT_SHA256 = (
+    "a90903540cc02cbeb7ff9f823f1a80eb778c7e22426a0e620b01c77a5ec8f5b4"  # manifest digest of WEIGHT_FILE
+)
+PARAMETER_COUNT = 222_903_552
+DECODER_LAYERS = 12  # config.json num_decoder_layers
+DEFAULT_TRAINABLE_DECODER_LAYERS = 4  # the last four decoder blocks (37,757,952 parameters)
+MAX_TRAIN_SOURCE_TOKENS = 512  # prefixed-source truncation ceiling during adaptation (never at inference)
+MAX_TRAIN_TARGET_TOKENS = 64  # target truncation ceiling during adaptation
+MAX_PREFIX_CHARS = 64
+MAX_EVAL_RECORDS = 2_000
+MIN_SCORED_RECORDS = 50  # below this a scored set is labelled a small sample
+ARTIFACT_FORMAT = "org.valcorza.t5-base.adapter.v1"
+ARTIFACT_FORMAT_VERSION = "1.0"
+ARTIFACT_WEIGHTS_NAME = "adapter.safetensors"
+ARTIFACT_MANIFEST_NAME = "manifest.json"
 # The four prefixes the upstream checkpoint was trained on, read from ``task_specific_params`` in the
 # snapshot config.json. Reported back as ``known_prefix``; the pipeline does not prepend any of them.
 TASK_PREFIXES = (
@@ -155,6 +179,19 @@ def _check_input_tokens(n_input: int) -> int:
     return n_input
 
 
+def _check_prefix(prefix: Any) -> str:
+    """A task prefix is a short non-empty string ending in ': ' (the upstream convention)."""
+    if not isinstance(prefix, str):
+        raise TypeError("prefix must be str")
+    if not prefix.strip():
+        raise ValueError("prefix is empty")
+    if len(prefix) > MAX_PREFIX_CHARS:
+        raise ValueError(f"prefix has {len(prefix)} chars; ceiling is MAX_PREFIX_CHARS={MAX_PREFIX_CHARS}")
+    if not prefix.endswith(": "):
+        raise ValueError("prefix must end with ': ' like the trained prefixes (e.g. 'paper title: ')")
+    return prefix
+
+
 def known_prefix(text: str) -> str | None:
     """Which trained task prefix ``text`` starts with, or ``None``; nothing is prepended."""
     return next((prefix for prefix in TASK_PREFIXES if text.startswith(prefix)), None)
@@ -205,44 +242,56 @@ def validate_inputs(
 def evaluation_report(
     result: Mapping[str, Any], references: Sequence[str] | None = None, *, sample_kind: str = "synthetic"
 ) -> dict[str, Any]:
-    """Evaluation stage: a machine-readable report even though no metric exists here.
+    """Evaluation stage: a machine-readable report for one ``generate`` result.
 
-    The repository ships no metric helper, so the verdict is always ``not-measurable`` (EVAL9).
-    ``references`` exists for interface parity with the fleet's other pipelines and is recorded in
-    ``reason`` rather than scored: ROUGE and BLEU need a scorer and enough referenced items to state
-    a dispersion, and manufacturing a number from a proxy such as length ratio or copy rate would
-    misrepresent a plumbing check as a quality measurement.
+    With ``references`` (one or more reference outputs for the same input) the report carries the
+    ROUGE-1/2/L F1 of that single output against its best-matching reference (`metrics.py`) with the
+    verdict ``sample-sanity`` — one item is a plumbing check, not a quality measurement; the corpus-level
+    stage is ``T5BaseText2TextPipeline.evaluate``. Without references the verdict is ``not-measurable``.
     """
+    from .metrics import rouge_scores
+
     generation = result.get("generation", {})
     supplied = references is not None
+    metrics: list[dict[str, Any]] = []
+    if supplied:
+        refs = [str(r) for r in references if str(r).strip()]
+        if not refs:
+            raise ValueError("references must hold at least one non-empty output")
+        scores = rouge_scores(str(result.get("text", "")), refs)
+        metrics = [
+            {"id": name, "value": 100.0 * value, "estimation": "single item, best of the references"}
+            for name, value in scores.items()
+        ]
     return {
-        "task": "caller-prefixed text-to-text generation (summarisation, translation)",
+        "task": "caller-prefixed text-to-text generation (summarisation, translation, or a taught prefix)",
         "score_semantics": (
             "the pipeline emits no probability, confidence or score: generated_tokens, input_tokens "
             "and stopped_by are counts and flags, and "
             f"{generation.get('decision_rule', DECISION_RULE)} produces some token at every step "
-            "with no minimum-probability cut-off and no shipped acceptance threshold"
+            "with no minimum-probability cut-off and no shipped acceptance threshold; ROUGE, when "
+            "references are supplied, is n-gram agreement with those references (own implementation), "
+            "not faithfulness"
         ),
         "sample_kind": sample_kind,
         "n_generated_tokens": int(result.get("generated_tokens", 0)),
-        "metrics": [],
+        "known_prefix": result.get("known_prefix"),
+        "metrics": metrics,
         "baselines": [],
-        "verdict": "not-measurable",
+        "verdict": "sample-sanity" if supplied else "not-measurable",
         "reason": (
-            "the repository ships no metric helper and a generation has no ground truth here"
-            + (
-                "; references were supplied but no metric helper exists to score them, and one "
-                "reference is not a dispersion"
-                if supplied
-                else "; the evaluated sample has no reference outputs"
-            )
+            "ROUGE-1/2/L are computed for one item against its reference outputs with the repository's own "
+            "implementation; a single item states no dispersion and is not a quality measurement"
+            if supplied
+            else "no reference output was supplied, so ROUGE cannot be computed; "
+            "a generation has no ground truth here"
         ),
         "needs": (
-            "reference outputs from the deployment domain — a reference summary per document, a "
-            "reference translation per sentence — over enough items to state a dispersion, scored "
-            "with the caller's own ROUGE-1/2/L or BLEU/chrF implementation, excluding or re-running "
-            "outputs whose stopped_by is max_new_tokens; no proxy such as length ratio or copy rate "
-            "substitutes for that"
+            "reference outputs from the deployment domain — a reference summary per document, a reference "
+            "translation per sentence, a reference title per abstract — over enough items to state a "
+            "dispersion, scored with `evaluate` (ROUGE-1/2/L, own implementation; BLEU/chrF for translation "
+            "need the caller's own scorer), excluding or re-running outputs whose stopped_by is "
+            "max_new_tokens; no proxy such as length ratio or copy rate substitutes for that"
         ),
         "model_id": MODEL_ID,
         "model_revision": MODEL_REVISION,
@@ -258,6 +307,9 @@ class T5BaseText2TextPipeline:
     _count_tokens: Callable[[str], int]
     device: str = "cpu"
     source: str = "injected"
+    adapter: dict[str, Any] | None = field(default=None, repr=False)
+    _model: Any = field(default=None, repr=False)
+    _tokenizer: Any = field(default=None, repr=False)
 
     @classmethod
     def from_pretrained(
@@ -301,7 +353,7 @@ class T5BaseText2TextPipeline:
             stopped_by = "eos" if eos_id in ids else "max_new_tokens"
             return tokenizer.decode(content, skip_special_tokens=True), len(content), stopped_by
 
-        return cls(runner, count_tokens, resolved_device, source)
+        return cls(runner, count_tokens, resolved_device, source, _model=model, _tokenizer=tokenizer)
 
     def _validate(self, text: Any, max_new_tokens: Any, num_beams: Any) -> int:
         text = _check_inputs(text, max_new_tokens, num_beams)
@@ -333,3 +385,353 @@ class T5BaseText2TextPipeline:
             "model_id": MODEL_ID,
             "model_revision": MODEL_REVISION,
         }
+
+    # ---- adaptation -----------------------------------------------------------------------------------
+
+    def _require_model(self) -> tuple[Any, Any]:
+        if self._model is None or self._tokenizer is None:
+            raise ValueError(
+                "this operation needs a pipeline built with from_pretrained() or from_artifact()"
+            )
+        return self._model, self._tokenizer
+
+    def evaluate(
+        self,
+        records: Sequence[Mapping[str, Any]],
+        *,
+        prefix: str,
+        max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
+        num_beams: int = 1,
+    ) -> dict[str, Any]:
+        """Generate from every record's prefixed source and score the outputs against its references
+        (ROUGE-1/2/L). The prefix is the caller's; nothing checks it is one the model knows."""
+        from .metrics import text_metrics
+        from .samples import validate_dataset
+
+        prefix = _check_prefix(prefix)
+        checked = validate_dataset(records, min_records=1, max_records=MAX_EVAL_RECORDS)["records"]
+        started = time.perf_counter()
+        hypotheses, truncated = [], 0
+        for record in checked:
+            result = self.generate(
+                prefix + record["source"], max_new_tokens=max_new_tokens, num_beams=num_beams
+            )
+            hypotheses.append(result["text"])
+            truncated += result["stopped_by"] == "max_new_tokens"
+        metrics = text_metrics(hypotheses, [r["targets"] for r in checked])
+        metrics.update(
+            {
+                "prefix": prefix,
+                "known_prefix": known_prefix(prefix),
+                "hit_token_ceiling": truncated,
+                "generation": {"max_new_tokens": max_new_tokens, "num_beams": num_beams, "do_sample": False},
+                "verdict": "measured" if len(checked) >= MIN_SCORED_RECORDS else "measured-small-sample",
+                "adapted": self.adapter is not None,
+                "seconds": round(time.perf_counter() - started, 3),
+                "model_id": MODEL_ID,
+                "model_revision": MODEL_REVISION,
+            }
+        )
+        return metrics
+
+    def _trainable_names(self, trainable_decoder_layers: int) -> list[str]:
+        if (
+            not isinstance(trainable_decoder_layers, int)
+            or not 1 <= trainable_decoder_layers <= DECODER_LAYERS
+        ):
+            raise ValueError(f"trainable_decoder_layers must be an int in 1..{DECODER_LAYERS}")
+        model, _ = self._require_model()
+        first = DECODER_LAYERS - trainable_decoder_layers
+        prefixes = tuple(f"decoder.block.{k}." for k in range(first, DECODER_LAYERS))
+        return [name for name, _p in model.named_parameters() if name.startswith(prefixes)]
+
+    def adapt(
+        self,
+        train: Sequence[Mapping[str, Any]],
+        val: Sequence[Mapping[str, Any]] | None = None,
+        *,
+        prefix: str,
+        epochs: int = 2,
+        lr: float = 5e-4,
+        batch_size: int = 8,
+        trainable_decoder_layers: int = DEFAULT_TRAINABLE_DECODER_LAYERS,
+        seed: int = 0,
+        progress: Callable[[dict[str, Any]], None] | None = None,
+        eval_generation: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Bounded supervised fine-tuning that teaches `prefix` on a validated text-to-text dataset.
+
+        Every training source is prepended with `prefix`; only the last `trainable_decoder_layers` decoder
+        blocks train (4 by default; the encoder, the shared embeddings, the earlier decoder blocks and the
+        tied output projection stay frozen). Teacher-forced cross-entropy on the first reference, AdamW at
+        a fixed learning rate with gradient clipping at 1.0, prefixed sources truncated to
+        MAX_TRAIN_SOURCE_TOKENS and targets to MAX_TRAIN_TARGET_TOKENS **during training only**. Epoch 0
+        records the frozen model's validation ROUGE under the same prefix; every epoch is scored on the
+        validation split with `eval_generation` (the pipeline defaults unless given), and the epoch with the
+        highest validation ROUGE-L is kept."""
+        from .samples import validate_dataset
+
+        prefix = _check_prefix(prefix)
+        if not isinstance(epochs, int) or not 1 <= epochs <= 20:
+            raise ValueError("epochs must be an int in 1..20")
+        if not (0.0 < lr <= 1e-2):
+            raise ValueError("lr must be in (0, 1e-2]")
+        if not isinstance(batch_size, int) or not 1 <= batch_size <= 32:
+            raise ValueError("batch_size must be an int in 1..32")
+        names = self._trainable_names(trainable_decoder_layers)
+        train_checked = validate_dataset(train)["records"]
+        val_checked = (
+            validate_dataset(val, min_records=1, max_records=MAX_EVAL_RECORDS)["records"] if val else []
+        )
+        generation = dict(eval_generation or {})
+        import torch
+
+        torch.manual_seed(seed)
+        model, tokenizer = self._require_model()
+        started = time.perf_counter()
+        wanted = set(names)
+        for name, param in model.named_parameters():
+            param.requires_grad_(name in wanted)
+        params = [p for p in model.parameters() if p.requires_grad]
+        n_trainable = sum(p.numel() for p in params)
+        optimiser = torch.optim.AdamW(params, lr=lr, weight_decay=0.01)
+        device = torch.device(self.device)
+
+        def score_val() -> dict[str, Any] | None:
+            if not val_checked:
+                return None
+            model.eval()
+            return {
+                k: v
+                for k, v in self.evaluate(val_checked, prefix=prefix, **generation).items()
+                if k in ("rouge1", "rouge2", "rougeL", "n", "mean_output_words", "hit_token_ceiling")
+            }
+
+        history: list[dict[str, Any]] = []
+        entry: dict[str, Any] = {"epoch": 0, "train_loss": None, "val": score_val(), "note": "frozen model"}
+        history.append(entry)
+        if progress:
+            progress(entry)
+        best_rouge = entry["val"]["rougeL"] if entry["val"] else -math.inf
+        best_state = {k: v.detach().clone() for k, v in model.state_dict().items() if k in wanted}
+        initial_state = {k: v.clone() for k, v in best_state.items()}
+        best_epoch = 0
+        generator = torch.Generator().manual_seed(seed)
+        try:
+            for epoch in range(1, epochs + 1):
+                model.train()
+                order = torch.randperm(len(train_checked), generator=generator).tolist()
+                losses = []
+                for start in range(0, len(order), batch_size):
+                    batch = [train_checked[i] for i in order[start : start + batch_size]]
+                    encoded = tokenizer(
+                        [prefix + r["source"] for r in batch],
+                        return_tensors="pt",
+                        padding=True,
+                        truncation=True,
+                        max_length=MAX_TRAIN_SOURCE_TOKENS,
+                    )
+                    labels = tokenizer(
+                        text_target=[r["targets"][0] for r in batch],
+                        return_tensors="pt",
+                        padding=True,
+                        truncation=True,
+                        max_length=MAX_TRAIN_TARGET_TOKENS,
+                    )["input_ids"]
+                    labels[labels == tokenizer.pad_token_id] = -100
+                    out = model(
+                        input_ids=encoded["input_ids"].to(device),
+                        attention_mask=encoded["attention_mask"].to(device),
+                        labels=labels.to(device),
+                    )
+                    optimiser.zero_grad(set_to_none=True)
+                    out.loss.backward()
+                    torch.nn.utils.clip_grad_norm_(params, 1.0)
+                    optimiser.step()
+                    losses.append(float(out.loss.detach()))
+                model.eval()
+                entry = {"epoch": epoch, "train_loss": sum(losses) / len(losses), "val": score_val()}
+                history.append(entry)
+                if progress:
+                    progress(entry)
+                current = entry["val"]["rougeL"] if entry["val"] else math.inf
+                if current > best_rouge or not entry["val"]:
+                    best_rouge = current
+                    best_state = {k: v.detach().clone() for k, v in model.state_dict().items() if k in wanted}
+                    best_epoch = epoch
+        except BaseException:
+            # Transactional: a failure in training, validation or the progress callback leaves the base
+            # exactly as it was, with every parameter frozen again.
+            restore = dict(model.state_dict())
+            restore.update(initial_state)
+            model.load_state_dict(restore, strict=True)
+            model.eval()
+            for param in model.parameters():
+                param.requires_grad_(False)
+            self.adapter = None
+            raise
+        merged = dict(model.state_dict())
+        merged.update(best_state)
+        model.load_state_dict(merged, strict=True)
+        model.eval()
+        for param in model.parameters():
+            param.requires_grad_(False)
+        self.adapter = {
+            "prefix": prefix,
+            "trainable_decoder_layers": trainable_decoder_layers,
+            "trainable_names": names,
+            "n_trainable": n_trainable,
+            "n_total": sum(p.numel() for p in model.parameters()),
+            "epochs": epochs,
+            "best_epoch": best_epoch,
+            "selection": "highest validation ROUGE-L" if val_checked else "final epoch (no validation split)",
+            "lr": lr,
+            "batch_size": batch_size,
+            "max_train_source_tokens": MAX_TRAIN_SOURCE_TOKENS,
+            "max_train_target_tokens": MAX_TRAIN_TARGET_TOKENS,
+            "eval_generation": generation,
+            "n_train": len(train_checked),
+            "n_val": len(val_checked),
+            "seed": seed,
+            "history": history,
+            "seconds": round(time.perf_counter() - started, 2),
+        }
+        return dict(self.adapter)
+
+    # ---- artifacts ------------------------------------------------------------------------------------
+
+    def save_artifact(self, output_dir: str | Path, metadata: Mapping[str, Any] | None = None) -> Path:
+        """Write the adapted decoder tensors as safetensors with a manifest naming the base and the prefix."""
+        if self.adapter is None:
+            raise ValueError("nothing to save: call adapt() first")
+        model, _ = self._require_model()
+        from safetensors.torch import save_file
+
+        out = Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        names = set(self.adapter["trainable_names"])
+        tensors = {k: v.detach().cpu().contiguous() for k, v in model.state_dict().items() if k in names}
+        weights_path = out / ARTIFACT_WEIGHTS_NAME
+        save_file(tensors, str(weights_path), metadata={"format": "pt"})
+        manifest = {
+            "format": ARTIFACT_FORMAT,
+            "format_version": ARTIFACT_FORMAT_VERSION,
+            "base_model": {
+                "id": MODEL_ID,
+                "revision": MODEL_REVISION,
+                "key": MODEL_KEY,
+                "weight_file": WEIGHT_FILE,
+                "weight_sha256": WEIGHT_SHA256,
+            },
+            "adapter": {k: v for k, v in self.adapter.items() if k not in ("history", "trainable_names")},
+            "history": self.adapter["history"],
+            "tensors": sorted(tensors),
+            "files": [
+                {
+                    "path": ARTIFACT_WEIGHTS_NAME,
+                    "bytes": weights_path.stat().st_size,
+                    "sha256": _sha256(weights_path),
+                }
+            ],
+            "metadata": dict(metadata or {}),
+        }
+        (out / ARTIFACT_MANIFEST_NAME).write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        return out
+
+    def _check_artifact_manifest(self, root: Path, manifest: Mapping[str, Any]) -> Path:
+        """Refuse an artifact whose manifest is not exactly the one this pipeline writes: the supported
+        format and version, the pinned base (id, revision, weight file, digest), exactly one file entry
+        named `adapter.safetensors` that resolves inside the artifact directory, and a recorded
+        `trainable_decoder_layers` in range. Nothing is deserialised here. The digest check that follows
+        detects corruption or drift of the weights relative to the adjacent manifest; it is not
+        authenticity against an actor who can replace both files."""
+        if manifest.get("format") != ARTIFACT_FORMAT:
+            raise ValueError(f"artifact format {manifest.get('format')!r} != {ARTIFACT_FORMAT!r}")
+        if manifest.get("format_version") != ARTIFACT_FORMAT_VERSION:
+            raise ValueError(
+                f"artifact format_version {manifest.get('format_version')!r} is not the supported "
+                f"{ARTIFACT_FORMAT_VERSION!r}"
+            )
+        base = manifest.get("base_model", {})
+        if (base.get("id"), base.get("revision"), base.get("weight_sha256")) != (
+            MODEL_ID,
+            MODEL_REVISION,
+            WEIGHT_SHA256,
+        ):
+            raise ValueError("artifact was adapted from a different base model, revision or weight file")
+        if base.get("weight_file", WEIGHT_FILE) != WEIGHT_FILE:
+            raise ValueError("artifact was adapted from a different base weight file")
+        files = manifest.get("files")
+        if not isinstance(files, list) or len(files) != 1:
+            raise ValueError("artifact manifest must list exactly one file")
+        entry = files[0]
+        if not isinstance(entry, Mapping) or entry.get("path") != ARTIFACT_WEIGHTS_NAME:
+            raise ValueError(f"artifact manifest must name exactly {ARTIFACT_WEIGHTS_NAME!r}")
+        weights_path = (root / entry["path"]).resolve()
+        if weights_path.parent != root.resolve():
+            raise ValueError("artifact weight path must resolve inside the artifact directory")
+        adapter = manifest.get("adapter")
+        layers = adapter.get("trainable_decoder_layers") if isinstance(adapter, Mapping) else None
+        if isinstance(layers, bool) or not isinstance(layers, int):
+            raise ValueError("artifact manifest does not record an integer trainable_decoder_layers")
+        if not isinstance(manifest.get("tensors"), list):
+            raise ValueError("artifact manifest must list its tensors")
+        return weights_path
+
+    def load_artifact(self, artifact_dir: str | Path) -> dict[str, Any]:
+        """Verify an adapter's manifest, digest and exact tensor set **before** deserialising, then overwrite
+        exactly the tensors it carries."""
+        root = Path(artifact_dir)
+        manifest = json.loads((root / ARTIFACT_MANIFEST_NAME).read_text(encoding="utf-8"))
+        weights_path = self._check_artifact_manifest(root, manifest)
+        entry = manifest["files"][0]
+        if not weights_path.is_file():
+            raise FileNotFoundError(f"artifact weights missing: {weights_path}")
+        if _sha256(weights_path) != entry["sha256"] or weights_path.stat().st_size != entry["bytes"]:
+            raise ValueError(f"{entry['path']}: digest or size mismatch; refusing to load")
+        # The exact tensor set the recorded configuration implies — no subset, no extra, no other layer.
+        expected = sorted(self._trainable_names(manifest["adapter"]["trainable_decoder_layers"]))
+        if sorted(manifest["tensors"]) != expected:
+            raise ValueError("artifact tensor list does not match its recorded configuration")
+        model, _ = self._require_model()
+        from safetensors.torch import load_file
+
+        tensors = load_file(str(weights_path))
+        if sorted(tensors) != expected:
+            raise ValueError("artifact tensor names differ from its manifest")
+        state = model.state_dict()
+        for key, value in tensors.items():
+            if key not in state or not key.startswith("decoder.block."):
+                raise ValueError(
+                    f"artifact tensor {key} is not an adaptable decoder tensor of the base model"
+                )
+            if tuple(value.shape) != tuple(state[key].shape):
+                raise ValueError(
+                    f"artifact tensor {key} has shape {tuple(value.shape)}, "
+                    f"base has {tuple(state[key].shape)}"
+                )
+        merged = dict(state)
+        merged.update({k: v.to(state[k].dtype) for k, v in tensors.items()})
+        model.load_state_dict(merged, strict=True)
+        model.eval()
+        self.adapter = {
+            **manifest["adapter"],
+            "trainable_names": manifest["tensors"],
+            "history": manifest.get("history", []),
+        }
+        return manifest
+
+    @classmethod
+    def from_artifact(
+        cls,
+        artifact_dir: str | Path,
+        *,
+        device: str | None = None,
+        weights_dir: str | Path | None = None,
+        allow_download: bool = False,
+    ) -> T5BaseText2TextPipeline:
+        pipeline = cls.from_pretrained(device=device, weights_dir=weights_dir, allow_download=allow_download)
+        pipeline.load_artifact(artifact_dir)
+        return pipeline

@@ -87,25 +87,30 @@ def test_validate_inputs_rejects_like_generate() -> None:
         validate_inputs([TRANSLATE], names=["a", "b"])
 
 
-def test_evaluation_report_is_always_not_measurable() -> None:
+def test_evaluation_report_is_not_measurable_without_references() -> None:
     report = evaluation_report(_result())
     assert report["verdict"] == "not-measurable"
     assert report["metrics"] == []
     assert report["baselines"] == []
     assert report["n_generated_tokens"] == 7
     assert report["sample_kind"] == "synthetic"
-    assert "no reference outputs" in report["reason"]
-    assert "ROUGE-1/2/L or BLEU/chrF" in report["needs"]
+    assert "no reference output" in report["reason"]
+    assert "ROUGE-1/2/L" in report["needs"]
     assert DECISION_RULE in report["score_semantics"]
     assert (report["model_id"], report["model_revision"]) == (MODEL_ID, MODEL_REVISION)
 
 
-def test_evaluation_report_stays_not_measurable_when_references_are_supplied() -> None:
-    report = evaluation_report(
-        _result(12, num_beams=4), ["Das Haus ist wunderbar."], sample_kind="BYOD upload"
-    )
-    assert report["verdict"] == "not-measurable"
-    assert report["metrics"] == []
+def test_evaluation_report_scores_one_item_as_sample_sanity() -> None:
+    result = {**_result(12, num_beams=4), "text": "Das Haus ist wunderbar."}
+    report = evaluation_report(result, ["Das Haus ist wunderbar.", "other"], sample_kind="BYOD upload")
+    assert report["verdict"] == "sample-sanity"
+    assert {m["id"]: m["value"] for m in report["metrics"]} == {
+        "rouge1": 100.0,
+        "rouge2": 100.0,
+        "rougeL": 100.0,
+    }
     assert report["sample_kind"] == "BYOD upload"
     assert report["n_generated_tokens"] == 12
-    assert "one reference is not a dispersion" in report["reason"]
+    assert "single item" in report["reason"]
+    with pytest.raises(ValueError, match="at least one non-empty"):
+        evaluation_report(result, [" "])
