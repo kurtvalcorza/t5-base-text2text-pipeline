@@ -310,6 +310,9 @@ class T5BaseText2TextPipeline:
     adapter: dict[str, Any] | None = field(default=None, repr=False)
     _model: Any = field(default=None, repr=False)
     _tokenizer: Any = field(default=None, repr=False)
+    # Pinned-base values of every tensor adapt() or load_artifact() has changed, kept the first time each is
+    # about to change: every adaptation starts from the verified base, never from a previous run (T5B-M2).
+    _base_state: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_pretrained(
@@ -445,6 +448,25 @@ class T5BaseText2TextPipeline:
         prefixes = tuple(f"decoder.block.{k}." for k in range(first, DECODER_LAYERS))
         return [name for name, _p in model.named_parameters() if name.startswith(prefixes)]
 
+    def _remember_base(self, model: Any, names: Sequence[str]) -> None:
+        state = model.state_dict()
+        for name in names:
+            if name not in self._base_state:
+                self._base_state[name] = state[name].detach().clone()
+
+    def restore_base(self) -> list[str]:
+        """Put the model back to the pinned base: undo every earlier adapt() or load_artifact() overlay.
+        Returns the names of the restored tensors (empty when the model was never changed)."""
+        model, _tokenizer = self._require_model()
+        restored = sorted(self._base_state)
+        if restored:
+            state = dict(model.state_dict())
+            state.update(self._base_state)
+            model.load_state_dict(state, strict=True)
+            model.eval()
+        self.adapter = None
+        return restored
+
     def adapt(
         self,
         train: Sequence[Mapping[str, Any]],
@@ -468,7 +490,9 @@ class T5BaseText2TextPipeline:
         MAX_TRAIN_SOURCE_TOKENS and targets to MAX_TRAIN_TARGET_TOKENS **during training only**. Epoch 0
         records the frozen model's validation ROUGE under the same prefix; every epoch is scored on the
         validation split with `eval_generation` (the pipeline defaults unless given), and the epoch with the
-        highest validation ROUGE-L is kept."""
+        highest validation ROUGE-L is kept. Every call starts from the pinned base: tensors an earlier
+        adapt() or load_artifact() changed are restored first, so epoch 0 is the frozen model whatever ran
+        before."""
         from .samples import validate_dataset
 
         prefix = _check_prefix(prefix)
@@ -490,6 +514,10 @@ class T5BaseText2TextPipeline:
         model, tokenizer = self._require_model()
         started = time.perf_counter()
         wanted = set(names)
+        touched = wanted | set(self._base_state)
+        previous_state = {k: v.detach().clone() for k, v in model.state_dict().items() if k in touched}
+        self._remember_base(model, names)
+        restored = self.restore_base()
         for name, param in model.named_parameters():
             param.requires_grad_(name in wanted)
         params = [p for p in model.parameters() if p.requires_grad]
@@ -564,6 +592,7 @@ class T5BaseText2TextPipeline:
             # exactly as it was, with every parameter frozen again.
             restore = dict(model.state_dict())
             restore.update(initial_state)
+            restore.update(previous_state)  # a failed call leaves the weights as they were before it
             model.load_state_dict(restore, strict=True)
             model.eval()
             for param in model.parameters():
@@ -593,6 +622,8 @@ class T5BaseText2TextPipeline:
             "n_train": len(train_checked),
             "n_val": len(val_checked),
             "seed": seed,
+            "started_from": "pinned base"
+            + (f" (restored {len(restored)} tensors changed by an earlier run)" if restored else ""),
             "history": history,
             "seconds": round(time.perf_counter() - started, 2),
         }
@@ -712,6 +743,9 @@ class T5BaseText2TextPipeline:
                     f"artifact tensor {key} has shape {tuple(value.shape)}, "
                     f"base has {tuple(state[key].shape)}"
                 )
+        self._remember_base(model, sorted(tensors))
+        self.restore_base()
+        state = model.state_dict()
         merged = dict(state)
         merged.update({k: v.to(state[k].dtype) for k, v in tensors.items()})
         model.load_state_dict(merged, strict=True)
