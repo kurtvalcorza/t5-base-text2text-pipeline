@@ -1,0 +1,66 @@
+[colab] Parsing notebook '/home/kurt/colab-runs/t5-base-text2text-pipeline-93a578f-8dffd0/t5_base_text2text_colab_93a578f_colab-cli-t4.ipynb'...
+[colab] Executing cell 1/13 - Infrastructure: build (or reuse) the isolated environment and route later cells to it...
+{'isolated_environment': '/content/dimer_isolated_env_1902ebaf663e', 'reused': False, 'isolated_python': '3.12.12', 'kernel_python': '3.13.15', 'locked_packages': 48, 'setup_seconds': 63}
+{'routed_to': '/content/dimer_isolated_env_1902ebaf663e/bin/python', 'worker_pid': 1268, 'worker_reused': False}
+[colab] Executing cell 2/13 - Infrastructure: record the runtime...
+{'notebook_source': {'repository': 't5-base-text2text-pipeline', 'repository_revision': '2d130f72190110224a5609861650d3086b7d6f7a', 'embedded_module': 'src/t5_base_text2text_pipeline/pipeline.py', 'embedded_modules': ['src/t5_base_text2text_pipeline/metrics.py', 'src/t5_base_text2text_pipeline/pipeline.py', 'src/t5_base_text2text_pipeline/samples.py'], 'module_sha256': '7e42dfde56001c64c42663283f62467c84a0435138bf19eed467b2c22bf346f1', 'generator': 'build_notebook.py/2.2', 'notebook_spec': '2.2'}, 'python': '3.12.12', 'executable': '/content/dimer_isolated_env_1902ebaf663e/bin/python', 'torch': '2.14.0+cu130', 'transformers': '4.57.6', 'cuda': True}
+[colab] Executing cell 3/13 - t5_base_text2text-08...
+[colab] Executing cell 4/13 - t5_base_text2text-10...
+[colab] Executing cell 5/13 - t5_base_text2text-12...
+[colab] Executing cell 6/13 - Infrastructure: stage and digest-verify the pinned snapshot, then load the model...
+{'model_id': 'google-t5/t5-base', 'revision': 'a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1', 'license': 'apache-2.0', 'files': 6, 'total_bytes': 893837231}
+{'weights_dir': '/content/weights/t5-base', 'fetched': ['README.md', 'config.json', 'generation_config.json', 'model.safetensors', 'spiece.model', 'tokenizer.json']}
+{'verified_files': 6, 'revision': 'a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1'}
+{'device': 'cuda:0', 'source': 'local-snapshot'}
+[colab] Executing cell 7/13 - t5_base_text2text-16...
+{'data_source': 'SciTLDR-A (abstract -> title) (allenai/scitldr @ 5ccad9c00a60ad75c9e04abf7f27d0f53f983b20; Apache-2.0 (Cachola et al. 2020; allenai/scitldr))', 'prefix': 'paper title: ', 'prefix_is_trained': False, 'raw_papers': {'train': 1992, 'dev': 619, 'test': 618}, 'splits': {'train': 300, 'validation': 50, 'test': 100}, 'file_sha256': {'train': 'b222771d387b...', 'dev': '3191fa98ccc0...', 'test': 'fb42dd6cd4f4...'}}
+{'train': {'n': 300, 'unique_sources': 300, 'source_chars': {'min': 273, 'max': 1596}, 'target_words': {'min': 2, 'max': 17}, 'digest': 'eadcee41e4a5839d...'}}
+{'validation': {'n': 50, 'unique_sources': 50, 'source_chars': {'min': 559, 'max': 1524}, 'target_words': {'min': 2, 'max': 15}, 'digest': '6139c99201750850...'}}
+{'test': {'n': 100, 'unique_sources': 100, 'source_chars': {'min': 434, 'max': 1594}, 'target_words': {'min': 2, 'max': 15}, 'digest': 'ea8cb17c7eb0f8f6...'}}
+{'example': {'id': 'train-0000', 'source': 'We introduce a neural architecture to perform amortized approximate Bayesian inference over latent random permutations of two sets of objects. The method involves approximating permanents of matrices ...', 'targets': ['Neural Permutation Processes']}}
+{'probe': 'duplicate id', 'rejected': "duplicate id 'same'"}
+{'probe': 'empty reference list', 'rejected': 'records[0]: targets must be a non-empty list of reference outputs'}
+{'probe': 'missing field', 'rejected': "records[0] is missing 'targets'"}
+{'probe': 'too small', 'rejected': '3 records; 8..20000 are required'}
+[colab] Executing cell 8/13 - t5_base_text2text-19...
+{'MAX_TEXT_CHARS': 20000, 'MAX_INPUT_TOKENS': 512, 'MAX_NEW_TOKENS': 512, 'MAX_NUM_BEAMS': 8, 'DEFAULT_MAX_NEW_TOKENS': 64, 'MAX_PREFIX_CHARS': 64}
+{'decision_rule': 'greedy argmax per decoding step (num_beams=1); beam search when num_beams > 1; no sampling', 'task_prefixes': ['summarize: ', 'translate English to German: ', 'translate English to French: ', 'translate English to Romanian: ']}
+{'id': 'input00', 'known_prefix': 'translate English to German: ', 'input_tokens': 11, 'generated_tokens': 5, 'stopped_by': 'eos', 'seconds': 4.492, 'text': 'Das Haus ist wunderbar.'}
+{'id': 'input01', 'known_prefix': 'summarize: ', 'input_tokens': 300, 'generated_tokens': 24, 'stopped_by': 'max_new_tokens', 'seconds': 0.544, 'text': 'the polynomial convolutional neural network is a weight-learning efficient variant of the traditional CNN .'}
+{'checks': {'one_result_per_input': True, 'generated_within_ceiling': True, 'input_within_ceiling': True, 'every_input_has_known_prefix': True, 'settings_echoed': True}, 'findings': 1, 'no_score': 'the pipeline emits no probability or quality score'}
+{'frozen_model_under_new_prefix': {'prefix': 'paper title: ', 'known_prefix': None, 'text': 'True', 'reference_title': 'PolyCNN: Learning Seed Convolutional Filters'}}
+[colab] Executing cell 9/13 - t5_base_text2text-22...
+{'lead1_baseline': {'rouge1': 16.73, 'rouge2': 4.83, 'rougeL': 14.08, 'mean_output_words': 21.4, 'n': 100}}
+{'frozen_model_new_prefix_test': {'rouge1': 0.71, 'rouge2': 0.67, 'rougeL': 0.71, 'mean_output_words': 1.0, 'mean_reference_words': 7.4, 'hit_token_ceiling': 0, 'known_prefix': None, 'n': 100, 'verdict': 'measured'}, 'seconds': 17.2}
+{'frozen_model_summarize_test': {'rouge1': 21.68, 'rouge2': 8.53, 'rougeL': 18.99, 'mean_output_words': 16.7, 'known_prefix': 'summarize: '}, 'seconds': 54.6}
+{'definitions': {'rouge1': 'unigram overlap F1 between the output and the best-matching reference, averaged over documents; percent', 'rouge2': 'bigram overlap F1 between the output and the best-matching reference, averaged over documents; percent', 'rougeL': 'longest-common-subsequence F1 (whole output as one token sequence) against the best-matching reference, averaged over documents; percent', 'tokenisation': 'lower-cased runs of ASCII letters and digits; no stemming; rouge-score-style, not rouge-score-identical'}}
+{'frozen_new_prefix': 'True', 'frozen_summarize': 'the polynomial convolutional neural network is a weight-learning efficient variant of the traditional CNN .', 'reference': 'PolyCNN: Learning Seed Convolutional Filters'}
+{'frozen_new_prefix': 'True', 'frozen_summarize': 'Neural machine translation (NMT) models learn representations containing linguistic information . it is not clear ', 'reference': 'Identifying and Controlling Important Neurons in Neural Machine Translation'}
+{'lead1_overlap': 'Lead-1 shares words with the references'}
+[colab] Executing cell 10/13 - t5_base_text2text-25...
+{'epoch': 0, 'train_loss': None, 'val_rouge1': 0.73, 'val_rouge2': 0.44, 'val_rougeL': 0.73, 'val_mean_output_words': 1.0, 'note': 'frozen model'}
+{'epoch': 1, 'train_loss': 2.8818, 'val_rouge1': 31.82, 'val_rouge2': 17.57, 'val_rougeL': 30.88, 'val_mean_output_words': 5.6}
+{'epoch': 2, 'train_loss': 2.244, 'val_rouge1': 36.63, 'val_rouge2': 21.05, 'val_rougeL': 35.39, 'val_mean_output_words': 5.9}
+{'prefix': 'paper title: ', 'trainable_parameters': 37757952, 'total_parameters': 222903552, 'best_epoch': 2, 'selection': 'highest validation ROUGE-L', 'started_from': 'pinned base', 'seconds': 66.9}
+[colab] Executing cell 11/13 - t5_base_text2text-28...
+{'rouge1': {'lead1': 16.73, 'frozen_summarize': 21.68, 'frozen_new_prefix': 0.71, 'adapted': 29.78}}
+{'rouge2': {'lead1': 4.83, 'frozen_summarize': 8.53, 'frozen_new_prefix': 0.67, 'adapted': 14.84}}
+{'rougeL': {'lead1': 14.08, 'frozen_summarize': 18.99, 'frozen_new_prefix': 0.71, 'adapted': 28.21}}
+{'mean_output_words': {'lead1': 21.41, 'frozen_summarize': 16.7, 'frozen_new_prefix': 1.03, 'adapted': 6.93}}
+{'delta_vs_frozen': {'rouge1': 29.08, 'rouge2': 14.17, 'rougeL': 27.51}}
+{'verdicts': {'adapted_vs_frozen_rougeL': 'improved', 'lead1_overlap': 'Lead-1 shares words with the references'}}
+{'adapted': 'PolyCNN: Learning Only One Convolutional Filter at Each Layer', 'reference': 'PolyCNN: Learning Seed Convolutional Filters'}
+{'adapted': 'Unsupervised Neural Machine Translation', 'reference': 'Identifying and Controlling Important Neurons in Neural Machine Translation'}
+{'report': 'outputs/t5_base_text2text_evaluation_report.json', 'verdicts': {'adapted_vs_frozen_rougeL': 'improved', 'lead1_overlap': 'Lead-1 shares words with the references'}}
+[colab] Executing cell 12/13 - t5_base_text2text-31...
+{'id': 'new-00', 'output': 'Adaptive Loss Scaling: Model-specific Loss Scales are automatically computed during MPT', 'reference': 'Adaptive Loss Scaling for Mixed Precision Training'}
+{'id': 'new-01', 'output': 'Sets with unknown Permutation and Cardinality', 'reference': 'Deep Perm-Set Net: Learn to predict sets with unknown permutation and cardinality using deep neural networks'}
+{'id': 'new-02', 'output': 'False', 'reference': 'Foveated Downsampling Techniques'}
+{'id': 'new-03', 'output': 'Variational-Recurrent Imputation Network: Variational-Recurrent Imputation Network', 'reference': 'Uncertainty-aware Variational-Recurrent Imputation Network for Clinical Time Series'}
+{'new_abstracts': {'n': 4, 'rouge1': 32.05, 'rougeL': 32.05, 'verdict': 'measured-small-sample'}, 'single_document_report_verdict': 'sample-sanity', 'german_translation_before_after': ['Das Haus ist wunderbar.', 'Das Haus ist wunderbar.']}
+{'artifact': 'outputs/t5_base_text2text_adapter', 'format': 'org.valcorza.t5-base.adapter.v1', 'prefix': 'paper title: ', 'tensors': 52, 'bytes': 151037976, 'sha256': '8f86cbccb083a9c0...'}
+{'reload_parity': {'identical_outputs': 6, 'of': 6}, 'reloaded_prefix': 'paper title: ', 'reloaded_best_epoch': 2}
+['t5_base_text2text_adapter', 't5_base_text2text_evaluation_report.json', 't5_base_text2text_generations.csv', 't5_base_text2text_input_manifest.json', 't5_base_text2text_result.json', 't5_base_text2text_train.csv']
+[colab] Executing cell 13/13 - t5_base_text2text-34...
+{'experiment': 'skipped (RUN_EXPERIMENT = False); the default path above is complete'}
+[colab] Saving notebook with outputs to '/home/kurt/colab-runs/t5-base-text2text-pipeline-93a578f-8dffd0/t5_base_text2text_colab_93a578f_colab-cli-t4_output.ipynb'...
