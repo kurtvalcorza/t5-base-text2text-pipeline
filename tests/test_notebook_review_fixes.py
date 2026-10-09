@@ -161,7 +161,8 @@ def test_t5b_m2_restore_base_undoes_every_earlier_change_stand_in():
     pipe._remember_base(model, names)
     model.params[names[0]] += 5  # an earlier adaptation
     pipe.adapter = {"best_epoch": 3}
-    assert pipe.restore_base() == names and pipe.adapter is None
+    assert pipe.restore_base() == [names[0]] and pipe.adapter is None  # only the changed tensor is reported
+    assert pipe.restore_base() == []  # nothing differs from the base any more
     assert (model.params[names[0]] == 0).all() and (model.params[names[1]] == 1).all()
     pipe._remember_base(model, names)  # a second call keeps the first (base) values
     model.params[names[1]] += 2
