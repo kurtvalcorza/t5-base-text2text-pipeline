@@ -80,7 +80,10 @@ def test_t5b_m1_section_1_is_idempotent_and_keeps_the_live_worker(notebook, tmp_
     lock_sha = re.search(r"^LOCK_SHA256 = '([0-9a-f]{64})'$", source, re.M).group(1)
     env = tmp_path / "env"
     (env / "bin").mkdir(parents=True)
-    (env / "bin" / "python").symlink_to(sys.executable)
+    try:
+        (env / "bin" / "python").symlink_to(sys.executable)
+    except OSError as exc:  # Windows without the symlink privilege (WinError 1314); the cell targets Linux runtimes
+        pytest.skip(f"cannot create a symlink here: {exc}")
     (env / ".dimer-lock-sha256").write_text(lock_sha + "\n", encoding="utf-8")
     monkeypatch.setenv("DIMER_ISOLATED_ENV", str(env))
     monkeypatch.delenv("DIMER_NOTEBOOK_CI_PREINSTALLED", raising=False)

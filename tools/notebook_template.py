@@ -1,4 +1,4 @@
-"""Per-repository template for tools/build_notebook.py (NOTEBOOK_SPEC 2.0 §4 standalone carrier).
+"""Per-repository template for tools/build_notebook.py (NOTEBOOK_SPEC 2.2 §4 standalone carrier).
 
 Only the task-specific prose and stage cells live here. Runtime install, the embedded pipeline
 modules (pipeline.py, samples.py, metrics.py), and the model pin/stage/verify cells are produced by
@@ -53,7 +53,7 @@ TEMPLATE = {
         "validation-ROUGE-L epoch selection, scores the held-out split again, generates titles for new abstracts with the "
         "adapted model, exports the adapter as safetensors with a manifest, and reloads that artifact into a fresh pipeline "
         "to verify output parity. The default path needs no repository clone, no DIMER worker or service, no credential, no "
-        "upload dialog and no configuration edit (NOTEBOOK_SPEC 2.0 §5). On CPU the whole path takes about eight minutes of "
+        "upload dialog and no configuration edit (NOTEBOOK_SPEC 2.2 §5). On CPU the whole path takes about eight minutes of "
         "model time after the downloads; a CUDA runtime is used automatically when present."
     ),
     "byod": (
@@ -666,6 +666,6 @@ TEMPLATE = {
         "- Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer (Raffel et al., JMLR 2020): https://arxiv.org/abs/1910.10683\n"
         "- TLDR: Extreme Summarization of Scientific Documents (Cachola et al., EMNLP Findings 2020; SciTLDR, Apache-2.0): https://arxiv.org/abs/2004.15011\n"
         "- ROUGE: A Package for Automatic Evaluation of Summaries (Lin, 2004): https://aclanthology.org/W04-1013\n"
-        "- DIMER Notebook Specification 2.0 and Model Card Specification 1.1 (fleet specs in the ml-worker repository)"
+        "- DIMER Notebook Specification 2.2 and Model Card Specification 1.1 (fleet specs in the ml-worker repository)"
     ),
 }
