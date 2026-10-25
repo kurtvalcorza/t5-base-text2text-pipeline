@@ -1,4 +1,4 @@
-"""Per-repository template for tools/build_notebook.py (NOTEBOOK_SPEC 2.2 §4 standalone carrier).
+"""Per-repository template for tools/build_notebook.py (NOTEBOOK_SPEC 2.5 §4 standalone carrier).
 
 Only the task-specific prose and stage cells live here. Runtime install, the embedded pipeline
 modules (pipeline.py, samples.py, metrics.py), and the model pin/stage/verify cells are produced by
@@ -53,7 +53,7 @@ TEMPLATE = {
         "validation-ROUGE-L epoch selection, scores the held-out split again, generates titles for new abstracts with the "
         "adapted model, exports the adapter as safetensors with a manifest, and reloads that artifact into a fresh pipeline "
         "to verify output parity. The default path needs no repository clone, no DIMER worker or service, no credential, no "
-        "upload dialog and no configuration edit (NOTEBOOK_SPEC 2.2 §5). On CPU the whole path takes about eight minutes of "
+        "upload dialog and no configuration edit (NOTEBOOK_SPEC 2.5 §5). On CPU the whole path takes about eight minutes of "
         "model time after the downloads; a CUDA runtime is used automatically when present."
     ),
     "byod": (
@@ -113,8 +113,8 @@ TEMPLATE = {
         "et al., 2020; Apache-2.0) ships, for 3,229 computer-science papers, the abstract and the paper's title — three "
         "digest-pinned JSON-Lines files fetched from the project repository at a pinned commit. The tutorial pairs each "
         "abstract with its title under the prefix `paper title: `, which the pinned checkpoint has **never seen**: the "
-        "frozen model answers it with whatever its trained tasks make of the words (the build record saw `True` and "
-        "`False`, scoring ROUGE-L 0.7), and the fine-tuning question is whether a bounded adaptation of the last decoder "
+        "frozen model answers it with whatever its trained tasks make of the words (the recorded runs saw `True` and "
+        "`False`, scoring test ROUGE-L 0.71 in the Colab T4 run of blob `09d88ee9` (commit `93a578f`, 2026-10-09)), and the fine-tuning question is whether a bounded adaptation of the last decoder "
         "blocks teaches the prefix on held-out papers. Three metrics are implemented in the carried `metrics.py` (corpus "
         "**ROUGE-1/2/L** F1, rouge-score-style, not rouge-score-identical) and two reference points frame the result: the "
         "**Lead-1 baseline** (the abstract's first sentence as the title) and the frozen model's own **`summarize: ` "
@@ -124,7 +124,7 @@ TEMPLATE = {
     "guided": {
         "opening": [
             (
-                "**Who this notebook is for.** A learner who knows basic Python, has used Colab or Jupyter, and wants to see how a text-to-text model is steered by a task prefix, what happens when the prefix is one it has never seen, and how to teach it a new one with a small referenced set without fooling themselves. No prior experience with T5 or fine-tuning is assumed; each term is explained where it first matters and again in the **Glossary** at the end. CPU is adequate (about eight minutes of model time); a GPU runtime is faster.\n\n**Input → Model → Output.**\n\n| | Generation | Scored titling | Bounded fine-tuning |\n|---|---|---|---|\n| Input | `prefix` + text (at most 512 tokens) | `paper title: ` + an abstract | abstract–title pairs (300 training and 50 validation in the sample) |\n| Model | T5-base encoder-decoder, beam search with explicit `max_new_tokens` and `num_beams` | the same model | the last four decoder blocks, trained with teacher-forced cross-entropy; everything else frozen |\n| Output | the generated text, token counts and `stopped_by` — no score | the title, scored by ROUGE-1/2/L against the paper's title | a 151 MB safetensors adapter, and held-out ROUGE beside a Lead-1 baseline |\n\n**How to use this notebook.** Choose a runtime (CPU works; **Runtime → Change runtime type → T4 GPU** is faster), then **Runtime → Run all**. Run all completes in one pass: Section 1 installs nothing into the notebook's own Python, so no restart is needed. Sections 1–3 are **infrastructure** — the isolated environment, the carried package and the model snapshot — and their cells are collapsed; you may run them without studying them. The learning path starts in Section 4. Form fields (`# @param`) are the only values meant to be edited, and the defaults reproduce the recorded run. Before each principal result the notebook asks you to **Predict**; after it come **What to notice** and a collapsible **Check your reasoning** with a worked answer from the recorded run (the Kaggle T4 run of 19 September 2026). Section 10 is a **change-one-thing experiment**, off by default. **Troubleshooting**, a **Glossary** and a **Conclusion** template are at the end. Writing your predictions down is optional.\n\n**Roadmap:** 1–3 infrastructure → 4 the referenced corpus, validation and the split *(evaluation practice)* → 5 the inference contract *(core concept: prefixes, no score)* → 6 the Lead-1 baseline and the frozen model under a new and a trained prefix *(evaluation practice)* → 7 bounded fine-tuning that teaches the prefix *(core concept)* → 8 held-out evaluation → 9 new abstracts, export and reload *(engineering)* → 10 change one thing (optional) → conclude."
+                "**Who this notebook is for.** A learner who knows basic Python, has used Colab or Jupyter, and wants to see how a text-to-text model is steered by a task prefix, what happens when the prefix is one it has never seen, and how to teach it a new one with a small referenced set without fooling themselves. No prior experience with T5 or fine-tuning is assumed; each term is explained where it first matters and again in the **Glossary** at the end. CPU is adequate (about eight minutes of model time); a GPU runtime is faster.\n\n**Input → Model → Output.**\n\n| | Generation | Scored titling | Bounded fine-tuning |\n|---|---|---|---|\n| Input | `prefix` + text (at most 512 tokens) | `paper title: ` + an abstract | abstract–title pairs (300 training and 50 validation in the sample) |\n| Model | T5-base encoder-decoder, beam search with explicit `max_new_tokens` and `num_beams` | the same model | the last four decoder blocks, trained with teacher-forced cross-entropy; everything else frozen |\n| Output | the generated text, token counts and `stopped_by` — no score | the title, scored by ROUGE-1/2/L against the paper's title | a 151 MB safetensors adapter, and held-out ROUGE beside a Lead-1 baseline |\n\n**How to use this notebook.** Choose a runtime (CPU works; **Runtime → Change runtime type → T4 GPU** is faster), then **Runtime → Run all**. Run all completes in one pass: Section 1 installs nothing into the notebook's own Python, so no restart is needed. Sections 1–3 are **infrastructure** — the isolated environment, the carried package and the model snapshot — and their cells are collapsed; you may run them without studying them. The learning path starts in Section 4. Form fields (`# @param`) are the only values meant to be edited, and the defaults reproduce the recorded run. Before each principal result the notebook asks you to **Predict**; after it come **What to notice** and a collapsible **Check your reasoning** with a worked answer from the recorded run (the Colab T4 run of blob `09d88ee9` (commit `93a578f`, 2026-10-09), recorded in `docs/release-verification.md`; not re-run for this revision). Section 10 is a **change-one-thing experiment**, off by default. **Troubleshooting**, a **Glossary** and a **Conclusion** template are at the end. Writing your predictions down is optional.\n\n**Roadmap:** 1–3 infrastructure → 4 the referenced corpus, validation and the split *(evaluation practice)* → 5 the inference contract *(core concept: prefixes, no score)* → 6 the Lead-1 baseline and the frozen model under a new and a trained prefix *(evaluation practice)* → 7 bounded fine-tuning that teaches the prefix *(core concept)* → 8 held-out evaluation → 9 new abstracts, export and reload *(engineering)* → 10 change one thing (optional) → conclude."
             )
         ]
     },
@@ -134,8 +134,8 @@ TEMPLATE = {
         "without leakage; generate through the public API with explicit `max_new_tokens`/`num_beams` and read "
         "`known_prefix`, the token counts and `stopped_by` correctly; score the frozen model under a new prefix beside the "
         "Lead-1 baseline and a trained prefix and read why an unknown prefix means nothing until it is taught; run a "
-        "bounded fine-tuning with explicit hyperparameters and validation-based epoch selection; evaluate on an independent "
-        "test split; generate for new abstracts; and export a safetensors adapter that reloads against the pinned base with "
+        "bounded fine-tuning with explicit hyperparameters and validation-based epoch selection; evaluate on a test split held out "
+        "from fine-tuning (not from pre-training); generate for new abstracts; and export a safetensors adapter that reloads against the pinned base with "
         "verified parity."
     ),
     "exclusions": (
@@ -147,7 +147,12 @@ TEMPLATE = {
     ),
     "prerequisites": [
         "- **Learner:** basic Python and Colab or Jupyter familiarity; no prior experience with T5 or fine-tuning. The notebook explains task prefixes, encoder-decoder generation, beam search, teacher forcing, ROUGE-1/2/L, the Lead-N baseline and the adapter where they are first used; the Glossary repeats them.",
-        "- **Runtime:** a fresh supported **Linux x86_64** runtime (Google Colab, Kaggle or Linux Jupyter). Section 1 builds its own Python 3.12.12 environment from a hash-locked list of manylinux wheels, so the kernel's own Python version does not matter and nothing is installed into it. The default path runs on CPU (float32) and uses CUDA automatically when available. CPU is adequate: the build record measured 5.5 s to load and digest-verify the 892 MB snapshot, about 0.3–0.6 s per abstract for 4-beam title-length generation (26–64 s for the 100-abstract test split) and about 100 s per training epoch over 300 abstracts plus a 50-abstract validation pass per epoch. The pinned `torch==2.14.0` install and the 892 MB checkpoint are the large downloads of the run.",
+        "- **Overlap with the training data:** T5 was pre-trained on C4, a cleaned April 2019 Common Crawl snapshot, together "
+        "with supervised tasks (model card, [1]). The SciTLDR abstracts and titles come from OpenReview and arXiv papers of "
+        "2018–2020 [2], and pages that show a paper's title beside its abstract are ordinary web pages, so some test abstracts "
+        "and titles may be in C4. This is inferred, not verified: C4 was not searched. The adapted model's titles may therefore "
+        "partly reflect recall, and the test score is optimistic for papers the model has never seen.",
+        "- **Runtime:** a fresh supported **Linux x86_64** runtime (Google Colab, Kaggle or Linux Jupyter). Section 1 builds its own Python 3.12.12 environment from a hash-locked list of manylinux wheels, so the kernel's own Python version does not matter and nothing is installed into it. The default path runs on CPU (float32) and uses CUDA automatically when available. CPU is adequate: a local CPU check while the notebook was built (not a recorded run in `docs/release-verification.md`, so treat these as estimates) measured 5.5 s to load and digest-verify the 892 MB snapshot, about 0.3–0.6 s per abstract for 4-beam title-length generation (26–64 s for the 100-abstract test split) and about 100 s per training epoch over 300 abstracts plus a 50-abstract validation pass per epoch. The pinned `torch==2.14.0` install and the 892 MB checkpoint are the large downloads of the run.",
         "- **Knowledge:** basic Python; what an encoder-decoder (seq2seq) model is; what a task prefix does in T5 and why an untrained prefix is just words; what greedy and beam decoding do; what ROUGE measures and why it is neither faithfulness nor a human judgement.",
         "- **Data contract:** records are `{id, source, targets}` — an input **without** any prefix and one or more reference outputs (`{id, source, target}` with a single string is accepted and normalised), the source 1..20,000 characters and, with the prefix, at most 512 BPE tokens at inference, each reference 1..400 characters, ids matching `[A-Za-z0-9_.:-]{1,64}` and unique; a dataset needs 8..20,000 records, and after the split the training split needs eight and the validation split one, so the effective BYOD minimum is **12 distinct sources** (`min_byod_records()` computes it); sources are de-duplicated case-insensitively before splitting so the same input never sits in two splits; the prefix is a short string ending in `: ` (at most 64 characters); during training only, prefixed sources are truncated to 512 and targets to 64 BPE tokens (inference never truncates — it rejects). BYOD accepts CSV, JSON or JSONL in that shape.",
         "- **Validation is structural, not semantic:** nothing checks that a reference is a good output for its source or that the prefix describes the task — a mislabelled corpus is fine-tuned on without complaint.",
@@ -355,8 +360,8 @@ TEMPLATE = {
                 "the frozen model's validation ROUGE under the same prefix and settings; every epoch is scored the same way, "
                 "and the epoch with the highest validation ROUGE-L is kept.\n\n"
                 "Watch validation ROUGE-L go from near zero to the thirties and `mean_output_words` settle near title length "
-                "within two epochs (about 100 s of training plus a validation pass per epoch on CPU). The build record's "
-                "counter-examples: two decoder blocks at a lower learning rate reached ROUGE-L 16 in two epochs and still "
+                "within two epochs (about 100 s of training plus a validation pass per epoch on CPU). A counter-example, "
+                "tried while the recipe was built; the repository does not record which split that comparison was scored on, so the choice of the default recipe may have seen the test split: two decoder blocks at a lower learning rate reached ROUGE-L 16 in two epochs and still "
                 "produced `False` for some abstracts — the new prefix needs more capacity than an in-domain tweak.\n\n"
                 "*Core concept.* Every call to `pipe.adapt` starts from the **pinned base**: tensors an earlier call changed are "
                 "restored first, so epoch 0 is always the frozen model. Re-running this cell with a changed field is a fresh run, "
@@ -390,14 +395,15 @@ TEMPLATE = {
         },
         {
             "md": (
-                "**What to notice:** epoch 0 (the frozen model under the new prefix), the loss, `val_rougeL` and `val_mean_output_words`.\n\n<details><summary>Check your reasoning</summary>One. In the recorded runs validation ROUGE-L went from about 0.73 at epoch 0 to about 33 after the first epoch and 35 after the second, which was kept, with outputs near title length. Four decoder blocks and a learning rate of 5e-4 are enough to make an unknown prefix mean *write a title*; the build record's two-block variant at a lower rate reached only about 16.</details>"
+                "**What to notice:** epoch 0 (the frozen model under the new prefix), the loss, `val_rougeL` and `val_mean_output_words`.\n\n<details><summary>Check your reasoning</summary>One. In the Colab T4 run of blob `09d88ee9` (commit `93a578f`, 2026-10-09) validation ROUGE-L went from 0.73 at epoch 0 to 30.88 after the first epoch and 35.39 after the second, which was kept (the Kaggle T4 run of an earlier blob printed 33.11 and 35.32), with outputs near title length. Four decoder blocks and a learning rate of 5e-4 are enough to make an unknown prefix mean *write a title*; a two-block variant at a lower rate, tried while the recipe was built; the repository does not record which split that comparison was scored on, so the choice of the default recipe may have seen the test split, reached only about 16.</details>"
             ),
         },
         {
             "md": (
                 "## 8. Held-out evaluation\n\n"
                 "The test split was never used for training or epoch selection, and no abstract in it appears in the "
-                "training or validation splits. The adapted model is scored under the new prefix exactly as the frozen model "
+                "training or validation splits. It is independent of this notebook's training, not of T5's pre-training: see the "
+                "overlap note in the Prerequisites. The adapted model is scored under the new prefix exactly as the frozen model "
                 "was in Section 6, and the four numbers are put side by side. Look for a ROUGE-L in the high twenties or "
                 "thirties — above the Lead-1 baseline and above the trained `summarize: ` prefix — with `mean_output_words` "
                 "near the reference length; the cell reports a **verdict** — whether the adapted ROUGE-L `improved`, showed "
@@ -587,7 +593,7 @@ TEMPLATE = {
                 "<details><summary>Check your reasoning</summary>Epoch 0 of the experiment must equal epoch 0 of the default run "
                 "(validation ROUGE-L about 0.73 in the recorded run): both are the frozen model, which the restart-from-base rule "
                 "guarantees — before that rule, this experiment silently continued from the already-taught model and could not "
-                "show anything. The build record's two-block variant, at a lower learning rate, reached ROUGE-L of about 16 in "
+                "show anything. The two-block variant at a lower learning rate, tried while the recipe was built; the repository does not record which split that comparison was scored on, so the choice of the default recipe may have seen the test split, reached ROUGE-L of about 16 in "
                 "two epochs and still answered `False` for some abstracts; at the default rate, read your own run: if "
                 "`mean_output_words` stays far from title length, the prefix has not taken.</details>"
             ),
@@ -616,8 +622,8 @@ TEMPLATE = {
         "Successful execution proves that the recorded repository revision's pipeline modules, carried in this standalone "
         "notebook, can acquire and digest-verify the pinned model snapshot, fetch and digest-verify a real referenced corpus, "
         "validate the demonstrated dataset contract without leakage, execute the inference contract and a bounded "
-        "fine-tuning that teaches a new prefix, evaluate against a trivial baseline and the frozen model on an independent "
-        "split, and emit the shown machine-readable artifacts — without the repository being reachable. It does **not** "
+        "fine-tuning that teaches a new prefix, evaluate against a trivial baseline and the frozen model on a split held out "
+        "from fine-tuning, and emit the shown machine-readable artifacts — without the repository being reachable. It does **not** "
         "establish benchmark superiority, output quality or faithfulness on any other task, a usable acceptance threshold, "
         "or production fitness.\n\n"
         "**Optional experiments (off by default; each names its field and what to run):** Section 10 trains two decoder blocks "
@@ -628,6 +634,7 @@ TEMPLATE = {
         "results and exports. BYOD: `USE_BYOD`, `BYOD_PATH` and `PREFIX` in Section 4, then **Run after** from Section 4, and "
         "read the Lead baseline before the adapted number.\n\n"
         "## Troubleshooting\n\n"
+'- **Where the environment lives** — Section 1 builds it in a folder named `dimer_isolated_env_<lock digest>` in the working directory. Set the environment variable `DIMER_ISOLATED_ENV` before Section 1 to build it somewhere else.\n'
 '- **Section 1 stops with "This notebook needs a Linux x86_64 runtime"** — you are on Windows, macOS or an ARM machine. Use Google Colab, Kaggle or a Linux x86_64 Jupyter server.\n- **The uv wheel fails its size/SHA-256 check, or a download in Section 1 times out** — run Section 1 again; a complete environment is reused, an incomplete one is finished. If it repeats, the network is blocking or altering `files.pythonhosted.org` or `pypi.org`.\n- **"The isolated environment\'s Python process exited"** — usually out of memory. Restart the session and choose **Run all**; leave the optional experiment off on a small runtime.\n- **You re-ran Section 1 on its own** — nothing is lost: it keeps the running worker and every variable, so the cells after it keep working. After a session restart, run from the top.\n- **Section 3 reports a size or SHA-256 mismatch, or cannot reach the Hub** — the message names the file. Delete it from the snapshot folder Section 3 prints and run Section 3 again; the snapshot comes from `huggingface.co`.\n- **Section 4 cannot fetch a SciTLDR file, or one fails its digest** — `fetch_corpus` names it; the default path needs `raw.githubusercontent.com`. Run Section 4 again (cached files are re-hashed); delete `weights/scitldr/` if a cached file is corrupt.\n- **CUDA out of memory in Section 7 or 10** — set `BATCH_SIZE = 4` in Section 7 and choose **Run after** from Section 7 (the numbers will differ a little from the recorded run).\n- **BYOD: "BYOD_PATH … does not exist"** — the path is relative to the working directory printed in the message.\n- **BYOD: "the upload dialog exists only in Google Colab"** — on Kaggle or Jupyter, put the zip in the runtime (or attach it as a dataset) and set `BYOD_PATH`.\n- **BYOD: "Upload exactly one .zip file"** — the dialog was cancelled or several files were chosen; run the cell again.\n- **BYOD: "CSV is missing columns …"** — the file needs `id`, `source`, `target` (a UTF-8 file saved by Excel, with a byte-order mark, is fine).\n- **BYOD: "CSV has a header but no data rows"** — add one row per input–output pair.\n- **BYOD: "… the source already starts with the task prefix …"** — give sources without any prefix; the notebook prepends `PREFIX` itself.\n- **BYOD: "CSV line N: …" / "JSONL line N: …" / "JSON record [i]: …"** — that record breaks the rule named after the colon; fix it.\n- **BYOD: "… leave the training split with … supply at least 12 distinct sources"** — add pairs.\n'
         "## Glossary\n\n"
         "- **Encoder-decoder (seq2seq)** — the encoder reads the input; the decoder writes the output token by token.\n"
@@ -658,14 +665,12 @@ TEMPLATE = {
         "- One reason not to trust this number on my own task yet: ___ (for example the size of the test split, ROUGE as "
         "overlap only, or the shared decoder).\n\n"
         "## References\n\n"
-        "- Repository README: https://github.com/kurtvalcorza/t5-base-text2text-pipeline/blob/main/README.md\n"
-        "- Repository model card: https://github.com/kurtvalcorza/t5-base-text2text-pipeline/blob/main/MODEL_CARD.md\n"
-        "- Weight provenance: https://github.com/kurtvalcorza/t5-base-text2text-pipeline/blob/main/docs/WEIGHTS.md\n"
-        "- Upstream model: https://huggingface.co/{MODEL_ID}\n"
-        "- Upstream code: https://github.com/google-research/text-to-text-transfer-transformer\n"
-        "- Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer (Raffel et al., JMLR 2020): https://arxiv.org/abs/1910.10683\n"
-        "- TLDR: Extreme Summarization of Scientific Documents (Cachola et al., EMNLP Findings 2020; SciTLDR, Apache-2.0): https://arxiv.org/abs/2004.15011\n"
-        "- ROUGE: A Package for Automatic Evaluation of Summaries (Lin, 2004): https://aclanthology.org/W04-1013\n"
-        "- DIMER Notebook Specification 2.2 and Model Card Specification 1.1 (fleet specs in the ml-worker repository)"
+        "[1] C. Raffel *et al.*, \"Exploring the limits of transfer learning with a unified text-to-text transformer,\" *J. Mach. Learn. Res.*, vol. 21, no. 140, pp. 1–67, 2020. [Online]. Available: https://arxiv.org/abs/1910.10683\n\n"
+        "[2] I. Cachola, K. Lo, A. Cohan, and D. S. Weld, \"TLDR: Extreme summarization of scientific documents,\" in *Findings Assoc. Comput. Linguist.: EMNLP*, 2020 (SciTLDR, Apache-2.0). [Online]. Available: https://arxiv.org/abs/2004.15011\n\n"
+        "[3] C.-Y. Lin, \"ROUGE: A package for automatic evaluation of summaries,\" in *Text Summarization Branches Out*, 2004, pp. 74–81. [Online]. Available: https://aclanthology.org/W04-1013\n\n"
+        "[4] Google Research, \"text-to-text-transfer-transformer,\" GitHub repository. [Online]. Available: https://github.com/google-research/text-to-text-transfer-transformer\n\n"
+        "[5] Upstream model checkpoint. [Online]. Available: https://huggingface.co/{MODEL_ID}\n\n"
+        "[6] K. Valcorza, \"t5-base-text2text-pipeline,\" README and weight provenance. [Online]. Available: https://github.com/kurtvalcorza/t5-base-text2text-pipeline/blob/main/README.md, https://github.com/kurtvalcorza/t5-base-text2text-pipeline/blob/main/docs/WEIGHTS.md; model card: https://github.com/kurtvalcorza/t5-base-text2text-pipeline/blob/main/MODEL_CARD.md\n\n"
+        "[7] DIMER Notebook Specification 2.5 and Model Card Specification 1.1, fleet specs in the ml-worker repository."
     ),
 }
