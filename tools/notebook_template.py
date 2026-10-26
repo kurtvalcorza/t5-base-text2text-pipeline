@@ -180,7 +180,9 @@ TEMPLATE = {
                 "JSON or JSONL file, as a path in this runtime — this works on Colab, Kaggle and Jupyter) or leave `BYOD_PATH` "
                 "empty to upload exactly one file through the Colab dialog; then choose **Run after** from this cell. This cell "
                 "first puts the model back to the pinned base, so Sections 5 and 6 score the frozen model. The effective minimum "
-                "is 12 distinct sources, and sources must not carry a prefix.\n\n"
+                "is 12 distinct sources, and sources must not carry a prefix. A refused file stops the cell with one line, `Refused: <file>: <reason and fix>`, "
+                "and removes the earlier run's results from the session and this notebook's exports from `outputs/`, so nothing from "
+                "that run can pass as a result of your file.\n\n"
                 "**Predict before running:** the three splits come from the release's own train / dev / test files, which are "
                 "disjoint by paper. Can the same *title* still appear in two splits?"
             ),
@@ -196,39 +198,81 @@ TEMPLATE = {
                 "if pipe.adapter is not None:\n"
                 "    # A re-run after Section 7 (BYOD, a new prefix or split): Sections 5 and 6 must score the frozen model, not the adapted one.\n"
                 "    print({{'restored_pinned_base': len(pipe.restore_base()), 'note': 'the adapted weights were removed; Sections 5-6 score the frozen model again'}})\n"
-                "if USE_BYOD:\n"
-                "    if BYOD_PATH.strip():\n"
-                "        byod_path = Path(BYOD_PATH.strip()).expanduser()\n"
-                "        if not byod_path.is_file():\n"
-                "            raise FileNotFoundError(f'BYOD_PATH {{BYOD_PATH!r}} is not a file (relative paths start at {{Path.cwd()}}): give the .csv, .json or .jsonl file.')\n"
-                "        file_name = byod_path.name\n"
-                "    else:\n"
-                "        try:\n"
-                "            from google.colab import files\n"
-                "        except ImportError:\n"
-                "            raise RuntimeError('USE_BYOD is True but BYOD_PATH is empty, and the upload dialog exists only in Google Colab: on Kaggle or Jupyter put the file in the runtime and set BYOD_PATH to its path.') from None\n"
-                "        uploaded = files.upload() or {{}}\n"
-                "        if len(uploaded) != 1:\n"
-                "            raise ValueError(f'Upload exactly one .csv, .json or .jsonl file (received {{len(uploaded)}}; a cancelled dialog sends none): run this cell again.')\n"
-                "        file_name, payload = next(iter(uploaded.items()))\n"
-                "        byod_path = Path('work') / Path(file_name).name\n"
-                "        byod_path.parent.mkdir(parents=True, exist_ok=True)\n"
-                "        byod_path.write_bytes(payload)\n"
-                "    records = load_byod_dataset(byod_path, prefix=PREFIX)\n"
-                "    splits = split_dataset(records, seed=SPLIT_SEED)\n"
+                'class BYODRefusal(ValueError):\n'
+                '    """A refused BYOD input: ``BYODRefusal(file_name, reason_and_fix)``."""\n\n'
+                '    dimer_refusal = True\n\n'
+                '    def __init__(self, file_name, reason):\n'
+                '        super().__init__(f"{{file_name}}: {{reason}}")\n'
+                '        self.file_name = file_name\n'
+                '        self.reason = reason\n\n'
+                '    def _render_traceback_(self):\n'
+                '        return [f"Refused: {{self}}"]\n\n\n'
+                '# The results an earlier run of this cell and the sections after it left in this session. A refused input removes them,\n'
+                "# and this notebook's exports in outputs/, so none of them can pass as a result of the refused input (DAT20).\n"
+                'RUN_RESULT_NAMES = (\n'
+                "    'records', 'splits', 'data_source', 'raw_papers', 'corpus', 'train_records', 'val_records', 'test_records', 'dataset_manifests', 'disjoint',\n"
+                "    'manifest', 'probes', 'probe', 'texts', 'item_ids', 'ceilings', 'input_manifest', 'results', 'item_id', 'text', 'started', 'result', 'checks',\n"
+                "    'new_prefix_probe', 'baseline_lead1', 't0', 'frozen_test', 'frozen_summarize', 'record', 'lead1_overlap', 'settings', 'adapt_result',\n"
+                "    'adapt_seconds', 'adapted_test', 'adapted_val', 'comparison', 'delta_rougeL', 'adaptation_verdict', 'metric', 'row', 'evaluation_report_payload',\n"
+                "    'f', 'new_records', 'used', 'new_metrics', 'new_results', 'item', 'single_report', 'german_after', 'writer', 'artifact_dir', 'artifact_manifest',\n"
+                "    'reloaded', 'before', 'after', 'parity', 'weight_entry', 'result_payload', 'canonical_files', 'canonical', 'experiment_dir', 'experiment_pipe',\n"
+                "    'experiment_result', 'experiment_test', 'side_by_side', 'key', 'unchanged',\n"
+                ')\n\n\n'
+                'def refuse_byod(file_name, reason):\n'
+                '    """Remove the earlier run\'s results, then stop the cell with one Refused: line naming the file and the fix."""\n'
+                '    import shutil\n\n'
+                '    for name in RUN_RESULT_NAMES:\n'
+                '        globals().pop(name, None)\n'
+                "    for path in Path('outputs').glob('t5_base_text2text_*'):\n"
+                '        shutil.rmtree(path) if path.is_dir() else path.unlink()\n'
+                "    reason = str(reason).removeprefix(f'{{file_name}}: ').rstrip('. ')\n"
+                "    if 'again' not in reason:\n"
+                "        reason += '; fix the file and run this cell again'\n"
+                "    raise BYODRefusal(file_name, reason + ' (the earlier results of this session were removed).') from None\n\n\n"
+                'if USE_BYOD:\n'
+                '    # DAT20: every problem with your file (path, upload, format, fields, prefix, split) stops here as one Refused: line.\n'
+                "    file_name = (Path(BYOD_PATH.strip()).name or BYOD_PATH.strip()) if BYOD_PATH.strip() else '(no file)'\n"
+                '    try:\n'
+                '        if BYOD_PATH.strip():\n'
+                '            byod_path = Path(BYOD_PATH.strip()).expanduser()\n'
+                '            if not byod_path.is_file():\n'
+                "                raise BYODRefusal(file_name, f'BYOD_PATH {{BYOD_PATH!r}} is not a file (relative paths start at {{Path.cwd()}}): give the .csv, .json or .jsonl file.')\n"
+                '        else:\n'
+                '            try:\n'
+                '                from google.colab import files\n'
+                '            except ImportError:\n'
+                "                raise BYODRefusal(file_name, 'USE_BYOD is True but BYOD_PATH is empty, and the upload dialog exists only in Google Colab: on Kaggle or Jupyter put the file in the runtime and set BYOD_PATH to its path.') from None\n"
+                '            uploaded = files.upload() or {{}}\n'
+                '            if len(uploaded) != 1:\n'
+                "                raise BYODRefusal(file_name, f'Upload exactly one .csv, .json or .jsonl file (received {{len(uploaded)}}; a cancelled dialog sends none): run this cell again.')\n"
+                '            file_name, payload = next(iter(uploaded.items()))\n'
+                "            byod_path = Path('work') / Path(file_name).name\n"
+                '            byod_path.parent.mkdir(parents=True, exist_ok=True)\n'
+                '            byod_path.write_bytes(payload)\n'
+                '        records = load_byod_dataset(byod_path, prefix=PREFIX)\n'
+                '        splits = split_dataset(records, seed=SPLIT_SEED)\n'
+                '    except BYODRefusal as exc:\n'
+                '        refuse_byod(exc.file_name, exc.reason)\n'
+                '    except (TypeError, ValueError, KeyError, OSError) as exc:\n'
+                '        refuse_byod(file_name, exc)\n'
                 "    data_source = 'BYOD (' + file_name + ')'\n"
                 "    raw_papers = {{'byod': len(records), 'duplicate_sources_dropped': len(records) - sum(len(part) for part in splits.values()), 'effective_minimum': min_byod_records()['total']}}\n"
                 "    if len(splits['test']) < 20:\n"
-                "        print({{'caution': f\"only {{len(splits['test'])}} held-out test records: ROUGE carries no dispersion estimate at this size; add pairs before reading it\"}})\n"
-                "else:\n"
+                '        print({{\'caution\': f"only {{len(splits[\'test\'])}} held-out test records: ROUGE carries no dispersion estimate at this size; add pairs before reading it"}})\n'
+                'else:\n'
                 "    corpus = read_corpus(fetch_corpus(cache_dir='weights/scitldr'))\n"
-                "    raw_papers = {{name: len(part) for name, part in corpus.items()}}\n"
-                "    splits = build_sample_dataset(corpus, seed=SPLIT_SEED)\n"
+                '    raw_papers = {{name: len(part) for name, part in corpus.items()}}\n'
+                '    splits = build_sample_dataset(corpus, seed=SPLIT_SEED)\n'
                 "    data_source = f'{{CORPUS_NAME}} ({{CORPUS_RELEASE}}; {{CORPUS_LICENSE}})'\n"
                 "train_records, val_records, test_records = splits['train'], splits['validation'], splits['test']\n"
-                "# The training split must hold MIN_RECORDS; validation and test only need one record each (split_dataset checks that).\n"
-                "dataset_manifests = {{name: validate_dataset(part, min_records=MIN_RECORDS if name == 'train' else 1) for name, part in splits.items()}}\n"
-                "disjoint = check_split_disjoint(splits)\n"
+                '# The training split must hold MIN_RECORDS; validation and test only need one record each (split_dataset checks that).\n'
+                'try:\n'
+                "    dataset_manifests = {{name: validate_dataset(part, min_records=MIN_RECORDS if name == 'train' else 1) for name, part in splits.items()}}\n"
+                '    disjoint = check_split_disjoint(splits)\n'
+                'except (TypeError, ValueError, KeyError) as exc:\n'
+                '    if not USE_BYOD:\n'
+                '        raise  # the pinned sample failing its contract is a genuine error, not a refusal\n'
+                '    refuse_byod(file_name, exc)\n'
                 "write_dataset_csv(train_records, 'outputs/{stem}_train.csv')\n"
                 "print({{'data_source': data_source, 'prefix': PREFIX, 'prefix_is_trained': known_prefix(PREFIX) is not None, 'raw_papers': raw_papers, 'splits': disjoint, 'file_sha256': {{k: v[2][:12] + '...' for k, v in CORPUS_FILES.items()}}}})\n"
                 "for name, manifest in dataset_manifests.items():\n"

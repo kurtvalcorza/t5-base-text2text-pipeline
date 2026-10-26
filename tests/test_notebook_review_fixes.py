@@ -303,9 +303,9 @@ def test_t5b_m1_byod_path_runs_section_4_outside_colab_from_the_base(notebook, t
 def test_t5b_m1_upload_outside_colab_cancelled_and_bad_path_are_explained(notebook, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setitem(sys.modules, "google", None)
-    with pytest.raises(RuntimeError, match="upload dialog exists only in Google Colab"):
+    with pytest.raises(ValueError, match="upload dialog exists only in Google Colab"):  # DAT20: a BYODRefusal
         exec(_section_4(notebook, ""), _section_4_namespace([]))
-    with pytest.raises(FileNotFoundError, match="BYOD_PATH 'nowhere.csv' is not a file"):
+    with pytest.raises(ValueError, match="nowhere.csv: BYOD_PATH 'nowhere.csv' is not a file"):  # DAT20: a BYODRefusal
         exec(_section_4(notebook, "nowhere.csv"), _section_4_namespace([]))
     for uploaded, message in (({}, "received 0"), ({"a.csv": b"", "b.csv": b""}, "received 2")):
         google, colab, files = (types.ModuleType(n) for n in ("google", "google.colab", "google.colab.files"))
