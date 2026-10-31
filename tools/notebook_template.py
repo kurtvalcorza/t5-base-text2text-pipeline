@@ -231,6 +231,9 @@ TEMPLATE = {
                 "    raise BYODRefusal(file_name, reason + ' (the earlier results of this session were removed).') from None\n\n\n"
                 'if USE_BYOD:\n'
                 '    # DAT20: every problem with your file (path, upload, format, fields, prefix, split) stops here as one Refused: line.\n'
+                '    # Caught: ValueError (the loader and split_dataset refuse bad content with it, a decoding or JSON error included) and\n'
+                '    # OSError only around load_byod_dataset, where it means the file cannot be read. TypeError and KeyError are not\n'
+                '    # caught: every record is checked (ValueError) before it is indexed, so either is a bug and keeps its traceback.\n'
                 "    file_name = (Path(BYOD_PATH.strip()).name or BYOD_PATH.strip()) if BYOD_PATH.strip() else '(no file)'\n"
                 '    try:\n'
                 '        if BYOD_PATH.strip():\n'
@@ -249,11 +252,14 @@ TEMPLATE = {
                 "            byod_path = Path('work') / Path(file_name).name\n"
                 '            byod_path.parent.mkdir(parents=True, exist_ok=True)\n'
                 '            byod_path.write_bytes(payload)\n'
-                '        records = load_byod_dataset(byod_path, prefix=PREFIX)\n'
+                '        try:\n'
+                '            records = load_byod_dataset(byod_path, prefix=PREFIX)\n'
+                '        except OSError as exc:\n'
+                "            raise BYODRefusal(file_name, f'the file cannot be read ({{type(exc).__name__}}: {{exc}}); give a .csv, .json or .jsonl file.') from None\n"
                 '        splits = split_dataset(records, seed=SPLIT_SEED)\n'
                 '    except BYODRefusal as exc:\n'
                 '        refuse_byod(exc.file_name, exc.reason)\n'
-                '    except (TypeError, ValueError, KeyError, OSError) as exc:\n'
+                '    except ValueError as exc:\n'
                 '        refuse_byod(file_name, exc)\n'
                 "    data_source = 'BYOD (' + file_name + ')'\n"
                 "    raw_papers = {{'byod': len(records), 'duplicate_sources_dropped': len(records) - sum(len(part) for part in splits.values()), 'effective_minimum': min_byod_records()['total']}}\n"
@@ -269,7 +275,7 @@ TEMPLATE = {
                 'try:\n'
                 "    dataset_manifests = {{name: validate_dataset(part, min_records=MIN_RECORDS if name == 'train' else 1) for name, part in splits.items()}}\n"
                 '    disjoint = check_split_disjoint(splits)\n'
-                'except (TypeError, ValueError, KeyError) as exc:\n'
+                'except ValueError as exc:  # validate_dataset and check_split_disjoint refuse with ValueError; anything else is a bug\n'
                 '    if not USE_BYOD:\n'
                 '        raise  # the pinned sample failing its contract is a genuine error, not a refusal\n'
                 '    refuse_byod(file_name, exc)\n'
