@@ -154,9 +154,53 @@ runtime, not general estimates.
 | 2026-09-19 | `e09a306` / `486beac4` | Local pre-flight harness (Windows, CPython 3.12.10, CPU float32, `torch 2.14.0+cu130` with `CUDA_VISIBLE_DEVICES=-1`, `transformers 4.57.6`) | Default sample path (install skipped, pins pre-installed → three carried modules → inline manifest assert → `stage_missing_files` fetched 0 of 7 entries because the snapshot was pre-staged → `verify_snapshot` 7 files → `from_pretrained` on CPU → `fetch_corpus` served from the pre-staged cache after its digest checks → 1,992 + 619 + 618 papers read, `prefix_is_trained` `False`, 300 / 50 / 100 drawn with `check_split_disjoint` clean and digests `eadcee41…` / `6139c992…` / `ea8cb17c…` → four dataset refusals → input manifest + `num_beams` refusal probe → German translation `Das Haus ist wunderbar.` and a `summarize: ` output with every sanity check `True`, new-prefix probe `True` → Lead-1 → frozen under both prefixes → `adapt` → validation + test evaluation → four unseen abstracts + German re-check → adapter export → reload parity) | 467.7 s | **PASSED** — 11/11 code cells; Lead-1 ROUGE-1/2/L 16.73 / 4.83 / 14.08; frozen under `paper title: ` 0.71 / 0.67 / 0.71 at 1.0 words (26.0 s); frozen under `summarize: ` 21.68 / 8.53 / 18.99 at 16.7 words (63.9 s); titles average 7.4 words; `adapt` 37,757,952 of 222,903,552 params, 300 abstracts, 2 epochs, 283.8 s, validation ROUGE-L 0.73 → 33.11 → 35.32 (`best_epoch` 2, train loss 2.882 → 2.223); **adapted test 31.61 / 16.40 / 29.97 at 6.5 words (Δ +30.91 / +15.73 / +29.27 vs the frozen new prefix)**; four unseen abstracts 39.15 / 33.78 / 39.15 `measured-small-sample`, single-item report `sample-sanity`; German translation unchanged after adaptation (`Das Haus ist wunderbar.`); adapter 151,037,976 B / 52 tensors, SHA-256 `4066061e…`; reload parity 6/6; six exports written. Pre-flight; hosted clean-runtime run still required |
 | 2026-09-14 | `198685c` / `fbc9be0e4069` (`TASK-INFERENCE`, superseded) | Kaggle CPU (`kurtvalcorza/dimer-nb2-t5-base-text2text` v1) | Default sample path of the inference-only notebook: two synthetic prefixed inputs, `stage_missing_files` fetching `model.safetensors` from the Hub, `verify_snapshot`, `generate`, `not-measurable` report | 285.0 s | **PASSED** — 8/8 code cells, 14 files, 894 MB staged; does not cover the `E2E` blob |
 
+### Hosted Colab T4 runs of blob `4161fa32` (2026-10-29)
+
+These runs executed the PR head `65e616bd9c23fe738155966be658900697b3409b`, notebook `tutorials/t5_base_text2text_colab.ipynb` blob `4161fa3213094ccba6b45884d9fcc065811308f3`, fetched at the 40-character SHA and Git-blob verified, with the Colab CLI (`colab exec -f`) on a fresh Colab Tesla T4 session (not a browser `Run all`). Each `run_summary.json` records `verdict` `PASS`, `exec_exit_code` 0, `input_unchanged` true and `stop_verified` true (the VM was released), and the SHA-256 of each executed notebook equals the summary's `executed_sha256`.
+
+**Default path (2026-10-29 22:15:03 UTC start).** Default settings, no overrides; session `suite-t5-65e616b-8dff`; wall 303.4 s (`wall_s`); `code_cells` 13, `executed_cells` 10, 0 errors. Retained evidence: [`docs/execution-evidence/2026-10-29-65e616b/`](execution-evidence/2026-10-29-65e616b/).
+
+Printed by the default run (verbatim lines from the executed outputs):
+
+```text
+{'verified_files': 6, 'revision': 'a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1'}
+{'lead1_baseline': {'rouge1': 16.73, 'rouge2': 4.83, 'rougeL': 14.08, 'mean_output_words': 21.4, 'n': 100}}
+{'frozen_model_summarize_test': {'rouge1': 21.68, 'rouge2': 8.53, 'rougeL': 18.99, 'mean_output_words': 16.7, 'known_prefix': 'summarize: '}, 'seconds': 51.2}
+{'rouge1': {'lead1': 16.73, 'frozen_summarize': 21.68, 'frozen_new_prefix': 0.71, 'adapted': 29.78}}
+{'rouge2': {'lead1': 4.83, 'frozen_summarize': 8.53, 'frozen_new_prefix': 0.67, 'adapted': 14.84}}
+{'rougeL': {'lead1': 14.08, 'frozen_summarize': 18.99, 'frozen_new_prefix': 0.71, 'adapted': 28.21}}
+{'delta_vs_frozen': {'rouge1': 29.08, 'rouge2': 14.17, 'rougeL': 27.51}}
+{'reload_parity': {'identical_outputs': 6, 'of': 6}, 'reloaded_prefix': 'paper title: ', 'reloaded_best_epoch': 2}
+```
+
+**DAT20 refusal record (2026-10-29, blob `4161fa32`).** Overrides, set by `--set` on a copy of the blob: `USE_BYOD` `False` → `True` and `BYOD_PATH` `''` → `'/content/sample_data/california_housing_test.csv'` (the run copy differs from the blob in exactly those 2 source lines). The suite cut the run copy right after the refusing cell `t5_base_text2text-16`, dropping 20 cells (6 of them code cells), which reproduces `Run all` stopping at the first error; the cut copy is `run_copy.ipynb`, SHA-256 `4468c57ce999c0e55f197f54b2ff09f1a40558fb4409e238da6133a63ca696c9` (Git blob `4e0d21e7`), equal to the summary's `run_copy_sha256`. The cut copy's earlier code cells completed without an error output; the refusing cell's only error output has `ename` `IsolatedCellRefusal` and no traceback, and its output holds exactly one `Refused:` line:
+
+```text
+Refused: california_housing_test.csv: CSV is missing columns ['id', 'source', 'target'] (it needs id, source, target); fix the file and run this cell again (the earlier results of this session were removed).
+```
+
+This run says nothing about the 20 cut cells, which did not run in it. Session `suite-t5-65e616b-8dff`, wall 122.1 s. Retained evidence: [`docs/execution-evidence/2026-10-29-65e616b-refusal/`](execution-evidence/2026-10-29-65e616b-refusal/).
+
+**Local-path redaction.** Local paths were replaced byte-wise by `<local-run-dir>` (and the Colab CLI install path by `<colab-cli-tool-dir>/`) before the first commit; each executed notebook and run copy was checked against its `run_summary.json` before any edit.
+
+| File (under `docs/execution-evidence/2026-10-29-65e616b/`) | Captured SHA-256 | Committed SHA-256 |
+|---|---|---|
+| `t5_base_text2text_colab_65e616b_colab-cli-t4_default.ipynb` | `446c010b619a251c9dcb82d3c594b4c0670da6a97d0e286f542b5da0418ab771` | `446c010b619a251c9dcb82d3c594b4c0670da6a97d0e286f542b5da0418ab771` (unchanged, no local path) |
+| `exec.log` | `b1b5caab9e059ddea77e98550e60c63176358f7ceabdbcec6b394f8061e8ea8c` | `67775edf0df0a51139e33ff1217d194b58f5dd8ed627b92be3cf15425835d540` (2 local-path replacements) |
+| `run_summary.json` | `4c0426809a950b918bf5b6f878ad9424e79005b2bd4d5fa42b18f8cee16273e3` | `4c0426809a950b918bf5b6f878ad9424e79005b2bd4d5fa42b18f8cee16273e3` (unchanged, no local path) |
+
+| File (under `docs/execution-evidence/2026-10-29-65e616b-refusal/`) | Captured SHA-256 | Committed SHA-256 |
+|---|---|---|
+| `t5_base_text2text_colab_65e616b_colab-cli-t4_refusal.ipynb` | `d4f47336074b3fd371cd90527cea8b4520a08c1bdc5017e3e5a32953d8aedde0` | `d4f47336074b3fd371cd90527cea8b4520a08c1bdc5017e3e5a32953d8aedde0` (unchanged, no local path) |
+| `exec.log` | `ddbc35dc3011b0cdd11e759095810409f2a96ef6fac58534209d0181e045e857` | `0e12e92b163048f548a4c1eee371e5cd2ae81ccda64e488c35a12ff57d87d8f4` (2 local-path replacements) |
+| `run_summary.json` | `605280f32d379c7bb96a695f6c4436f5c7de5590d882c4da1df4c9d00da0dd95` | `605280f32d379c7bb96a695f6c4436f5c7de5590d882c4da1df4c9d00da0dd95` (unchanged, no local path) |
+| `run_copy.ipynb` | `4468c57ce999c0e55f197f54b2ff09f1a40558fb4409e238da6133a63ca696c9` | `4468c57ce999c0e55f197f54b2ff09f1a40558fb4409e238da6133a63ca696c9` (unchanged, no local path) |
+
+Not exercised by these runs: an accepted BYOD input (REL12), a browser `Run all` of the interactive journeys (REL2), and every other open gate named in this file; these runs close none of them.
+
 ## Current status
 
-**Candidate (2026-10-26, DAT20 refusal display).** The current blob `4161fa32` (code commit `960ec12`) shows a refused BYOD input as one `Refused: <file>: <reason>` line with no traceback, removes the earlier run's results from the session and this notebook's exports from `outputs/`, and stops Run all at that cell, while genuine failures keep their traceback (NOTEBOOK_SPEC DAT19/DAT20); its hosted Colab T4 runs (the default path and a scripted refusal, `USE_BYOD=True;BYOD_PATH='/content/sample_data/california_housing_test.csv'`) are pending, and the hosted runs of earlier blobs, including the run of `ac38dca05ca7`, are history for it (REL14). The status below is history.
+**Candidate (2026-10-26, DAT20 refusal display).** The current blob `4161fa32` (code commit `960ec12`) shows a refused BYOD input as one `Refused: <file>: <reason>` line with no traceback, removes the earlier run's results from the session and this notebook's exports from `outputs/`, and stops Run all at that cell, while genuine failures keep their traceback (NOTEBOOK_SPEC DAT19/DAT20); its default path (2026-10-29; 13 code cells, exit 0, 0 errors) and its scripted DAT20 refusal (2026-10-29; `USE_BYOD=True;BYOD_PATH=/content/sample_data/california_housing_test.csv`: exactly one `Refused:` line at cell `t5_base_text2text-16`, no traceback, earlier cells clean, VM released) both passed on a hosted Colab Tesla T4 (Colab CLI `colab exec -f`, not a browser `Run all`), and the hosted runs of earlier blobs, including the run of `ac38dca05ca7`, are history for it (REL14). The status below is history.
 
 **Candidate (2026-10-25).** The current notebook `tutorials/t5_base_text2text_colab.ipynb` is blob `ac38dca05ca77b15f58f8a44e4643512d33f542f` (commit `ba60b61`), generated at `a03787d` (T89-1..T89-4); it changes markdown, the use notice, `metadata.dimer` and the `NOTEBOOK_SOURCE` record only. That exact blob completed one pass with no restart and 0 errors on a fresh Colab Tesla T4 on 2026-10-25 (Colab CLI sequential execution, 13/13 code cells, 296.3 s wall; validation ROUGE-L 0.73 → 35.39 at the kept epoch 2; test ROUGE-L Lead-1 14.08 / `summarize:` 18.99 / frozen new prefix 0.71 / adapted 28.21, verdict `improved`; reload parity 6/6; evidence in `docs/execution-evidence/2026-10-25-ba60b61/`) — the same figures as the previous blob's run. The paths this blob's runs cover: the default path only. The remaining gates are REL12 (a hosted BYOD run) and REL2 (a browser `Run all`). The runs of earlier blobs below are history (REL14).
 
