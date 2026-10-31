@@ -1,0 +1,71 @@
+{
+  "repo": "t5-base-text2text-pipeline",
+  "sha": "65e616bd9c23fe738155966be658900697b3409b",
+  "notebook": "tutorials/t5_base_text2text_colab.ipynb",
+  "blob": "4161fa3213094ccba6b45884d9fcc065811308f3",
+  "gpu": "T4",
+  "session": "suite-t5-65e616b-8dff",
+  "started_utc": "2026-10-29T22:20:51+00:00",
+  "runner": "Colab CLI `colab exec -f` on a fresh session (not a browser Run all)",
+  "overrides": [
+    {
+      "name": "USE_BYOD",
+      "from": "False",
+      "to": "True"
+    },
+    {
+      "name": "BYOD_PATH",
+      "from": "''",
+      "to": "'/content/sample_data/california_housing_test.csv'"
+    }
+  ],
+  "run_copy_blob": "4e0d21e7ed00879924a35f018a16ac9166b408c5",
+  "run_copy_sha256": "4468c57ce999c0e55f197f54b2ff09f1a40558fb4409e238da6133a63ca696c9",
+  "run_copy_note": "refusal run: the run copy is the committed notebook with the listed assignment overrides, cut immediately after the refusal cell and re-serialised (nbformat layout); input_unchanged compares against that copy",
+  "truncated_after_cell": "t5_base_text2text-16",
+  "refusal_cell_ref": "t5_base_text2text-16",
+  "refusal_cell_index": 7,
+  "cells_dropped": 20,
+  "code_cells_dropped": 6,
+  "original_sha256": "487a9c17f0cfb3c74b9ccc7d35c2f0fc41b83c490c79e91dc3dec4f7944d3717",
+  "status": "[suite-t5-65e616b-8dff] gpu-t4-s-usw4a2-2nrgczvn6so4g | Hardware: T4 | Shape: Standard | Variant: GPU | Status: IDLE",
+  "exec_exit_code": 0,
+  "stopped": true,
+  "stop_verified": true,
+  "wall_s": 122.1,
+  "input_unchanged": true,
+  "executed_file": "t5_base_text2text_colab_65e616b_colab-cli-t4_output.ipynb",
+  "log_cells": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "log_total": 7,
+  "code_cells": 7,
+  "executed_cells": 4,
+  "errors": [
+    {
+      "cell": "t5_base_text2text-16",
+      "ename": "IsolatedCellRefusal",
+      "evalue": "california_housing_test.csv: CSV is missing columns ['id', 'source', 'target'] (it needs id, source, target); fix the file and run this cell again (the earlier results of this session were removed)."
+    }
+  ],
+  "execution_counts": [],
+  "sequential": null,
+  "executed_sha256": "d4f47336074b3fd371cd90527cea8b4520a08c1bdc5017e3e5a32953d8aedde0",
+  "log_sequential_complete": true,
+  "mode": "expect_refusal",
+  "refusal_line": "Refused: california_housing_test.csv: CSV is missing columns ['id', 'source', 'target'] (it needs id, source, target); fix the file and run this cell again (the earlier results of this session were removed).",
+  "halting_cell_index": 7,
+  "halting_cell_id": "t5_base_text2text-16",
+  "error_cells": [
+    7
+  ],
+  "refusal_fail_reasons": [],
+  "refusal_ok": true,
+  "verdict": "PASS"
+}
