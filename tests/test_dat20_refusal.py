@@ -279,3 +279,69 @@ def test_default_path_contract_failure_is_not_a_refusal(cells, tmp_path, monkeyp
         exec(compile(_cell_code(cells, None), "<section 4>", "exec"), ns)
     assert not getattr(caught.value, "dimer_refusal", False)
     assert ns["baseline_lead1"] == "old"
+
+
+# --- the catches are narrow: only bad input is refused; an internal TypeError/KeyError/OSError keeps its traceback --
+
+
+def test_the_byod_catches_are_narrow_in_the_notebook_source(cells):
+    import re
+
+    source = _cell_code(cells, None)
+    branch = source[source.index("if USE_BYOD:\n") : source.index("write_dataset_csv(train_records")]
+    caught = re.findall(r"^\s*except (.+?)(?: as \w+)?:", branch, flags=re.M)
+    assert caught == ["ImportError", "OSError", "BYODRefusal", "ValueError", "ValueError"], caught
+    assert "        try:\n            records = load_byod_dataset(byod_path, prefix=PREFIX)\n        except OSError as exc:\n" in branch
+
+
+def test_a_file_that_is_not_utf8_is_still_one_refused_line(cells, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setitem(sys.modules, "google.colab", None)
+    data = tmp_path / "latin.csv"
+    data.write_bytes("id,source,target\nr1,caf\xe9 au lait,caf\xe9\n".encode("latin-1"))
+    _refused(cells, tmp_path, str(data), "latin.csv", "codec can't decode")
+
+
+def test_an_unreadable_file_is_still_one_refused_line(cells, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setitem(sys.modules, "google.colab", None)
+    data = tmp_path / "locked.json"
+    data.write_text("[]", encoding="utf-8")
+    ns = _namespace(tmp_path)
+
+    def unreadable(path, **_kwargs):
+        raise PermissionError(13, "Permission denied", str(path))
+
+    ns["load_byod_dataset"] = unreadable
+    with pytest.raises(ValueError) as caught:
+        exec(compile(_cell_code(cells, str(data)), "<section 4>", "exec"), ns)
+    _one_line(caught.value, "locked.json", "the file cannot be read (PermissionError: ")
+
+
+@pytest.mark.parametrize("where", ["split_dataset", "validate_dataset"])
+@pytest.mark.parametrize("error", [TypeError("internal helper bug"), KeyError("internal key"), OSError("internal I/O bug")], ids=["TypeError", "KeyError", "OSError"])
+def test_an_internal_error_after_the_loader_keeps_its_traceback(cells, tmp_path, monkeypatch, error, where):
+    import traceback
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setitem(sys.modules, "google.colab", None)
+    data = tmp_path / "pairs.json"
+    data.write_text("[]", encoding="utf-8")
+    ns = _namespace(tmp_path)
+    records = [_record(i) for i in range(3)]
+    ns["load_byod_dataset"] = lambda _path, **_kwargs: records
+
+    def broken(*args, **kwargs):
+        if where == "validate_dataset" and "min_records" not in kwargs:
+            return sm.validate_dataset(*args, **kwargs)
+        raise error
+
+    if where == "validate_dataset":
+        ns["split_dataset"] = lambda recs, **_kwargs: {"train": recs, "validation": recs, "test": recs}
+    ns[where] = broken
+    with pytest.raises(type(error)) as caught:
+        exec(compile(_cell_code(cells, str(data)), "<section 4>", "exec"), ns)
+    assert caught.value is error and not getattr(caught.value, "dimer_refusal", False)
+    rendered = "".join(traceback.format_exception(caught.value))
+    assert rendered.startswith("Traceback") and "broken" in rendered and "Refused:" not in rendered
+    assert ns["baseline_lead1"] == "old" and (tmp_path / "outputs" / f"{STEM}_result.json").exists()  # nothing is cleared
